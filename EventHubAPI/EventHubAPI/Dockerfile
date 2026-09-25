@@ -1,4 +1,7 @@
 ﻿FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS base
+USER root
+COPY ["certs/russian_trusted_root_ca.crt", "/usr/local/share/ca-certificates/"]
+RUN update-ca-certificates
 USER $APP_UID
 WORKDIR /app
 
