@@ -42,8 +42,9 @@ using GitHub Actions. Docker group membership takes effect on a new login.
 ## 2. DNS and environment
 
 Create three DNS `A` records pointing to `185.185.68.210`: `api.eventhub.faberlab.tech`,
-`admin.eventhub.faberlab.tech`, and `eventhub.faberlab.tech`. Fill the root
-`.env` from `.env.example`:
+`admin.eventhub.faberlab.tech`, and `eventhub.faberlab.tech`. GitHub Actions
+builds the server's `.env` from the committed `.env.example` and individual
+GitHub secrets; do not upload your local `.env`:
 
 - `API_DOMAIN`, `ADMIN_DOMAIN`, `WEBAPP_DOMAIN`: bare domain names, without
   `https://` or path.
@@ -52,8 +53,8 @@ Create three DNS `A` records pointing to `185.185.68.210`: `api.eventhub.faberla
 - `Max__WebhookSecret`: a new random value accepted by MAX; for example,
   `openssl rand -hex 32`.
 - `Max__WebAppName`: the name of the WebApp connected to the bot in MAX. Leave
-  it empty until the WebApp is registered; fill it and update the `ENV_FILE`
-  GitHub secret before enabling the bot's WebApp button.
+  it empty until the WebApp is registered; then set the `MAX_WEBAPP_NAME`
+  repository variable before enabling the bot's WebApp button.
 - PostgreSQL, MinIO, JWT, admin password hash, and bot token settings must be
   filled. `Minio__AccessKey` must match `MINIO_ROOT_USER`, and
   `Minio__SecretKey` must match `MINIO_ROOT_PASSWORD`.
@@ -68,11 +69,24 @@ In the new monorepo, set these repository secrets:
 
 | Secret | Value |
 | --- | --- |
-| `DEPLOY_HOST` | Public IP or SSH hostname of the server |
+| `DEPLOY_HOST` | `185.185.68.210` |
 | `DEPLOY_USER` | `deploy` |
 | `DEPLOY_SSH_KEY` | Private key for the `deploy` account |
 | `DEPLOY_KNOWN_HOSTS` | Verified SSH host-key line for the server |
-| `ENV_FILE` | Entire contents of the root production `.env` |
+| `POSTGRES_PASSWORD` | Value of local `POSTGRES_PASSWORD` |
+| `JWT_SIGNING_KEY` | Value of local `Jwt__SigningKey` |
+| `ADMIN_PASSWORD_HASH` | Value of local `Admin__PasswordHash` |
+| `MAX_BOT_TOKEN` | Value of local `Max__BotToken` |
+| `MAX_WEBHOOK_SECRET` | Value of local `Max__WebhookSecret` |
+| `MINIO_ROOT_PASSWORD` | Value of local `MINIO_ROOT_PASSWORD` |
+
+No `ENV_FILE` secret is used. `Minio__AccessKey` is copied from
+`MINIO_ROOT_USER`, and `Minio__SecretKey` is copied from
+`MINIO_ROOT_PASSWORD` during generation. Public defaults and domains come from
+`.env.example`. Optional repository variables `API_DOMAIN`, `ADMIN_DOMAIN`,
+`WEBAPP_DOMAIN`, `ADMIN_USERNAME`, `MINIO_ROOT_USER`, and `MAX_WEBAPP_NAME`
+override those defaults. Leave `MAX_WEBAPP_NAME` unset until the WebApp is
+connected to the bot.
 
 Set `DEPLOY_HOST` to `185.185.68.210`. The workflow checks that all three
 domains resolve to this IP before copying files to the server. Verify DNS with
@@ -80,9 +94,10 @@ domains resolve to this IP before copying files to the server. Verify DNS with
 
 Get a host-key line with `ssh-keyscan -H 185.185.68.210`, and compare its
 fingerprint against `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub` run on the
-server. Do not paste private keys or `.env` into Git. The workflow validates
-required settings, copies the source over SSH, builds all images on the server,
-and starts the production profile after a push to `main` or a manual run.
+server. Do not paste private keys or `.env` into Git. The workflow assembles
+`.env` in the runner, validates settings, copies source and configuration over
+SSH, builds all images on the server, and starts the production profile after a
+push to `main` or a manual run.
 
 ## 4. HTTPS and MAX
 

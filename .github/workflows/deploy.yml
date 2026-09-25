@@ -18,16 +18,32 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Prepare SSH and environment
+      - name: Build deployment environment
+        id: build_env
+        env:
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          JWT_SIGNING_KEY: ${{ secrets.JWT_SIGNING_KEY }}
+          ADMIN_PASSWORD_HASH: ${{ secrets.ADMIN_PASSWORD_HASH }}
+          MAX_BOT_TOKEN: ${{ secrets.MAX_BOT_TOKEN }}
+          MAX_WEBHOOK_SECRET: ${{ secrets.MAX_WEBHOOK_SECRET }}
+          MINIO_ROOT_PASSWORD: ${{ secrets.MINIO_ROOT_PASSWORD }}
+          API_DOMAIN: ${{ vars.API_DOMAIN }}
+          ADMIN_DOMAIN: ${{ vars.ADMIN_DOMAIN }}
+          WEBAPP_DOMAIN: ${{ vars.WEBAPP_DOMAIN }}
+          ADMIN_USERNAME: ${{ vars.ADMIN_USERNAME }}
+          MINIO_ROOT_USER: ${{ vars.MINIO_ROOT_USER }}
+          MAX_WEBAPP_NAME: ${{ vars.MAX_WEBAPP_NAME }}
+        run: python3 deploy/build-env.py
+
+      - name: Prepare SSH
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
           DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
           DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
-          ENV_FILE: ${{ secrets.ENV_FILE }}
         run: |
           set -euo pipefail
-          for key in DEPLOY_HOST DEPLOY_USER DEPLOY_SSH_KEY DEPLOY_KNOWN_HOSTS ENV_FILE; do
+          for key in DEPLOY_HOST DEPLOY_USER DEPLOY_SSH_KEY DEPLOY_KNOWN_HOSTS; do
             if [[ -z "${!key}" ]]; then
               echo "::error::Missing GitHub secret: $key"
               exit 1
@@ -38,32 +54,32 @@ jobs:
           chmod 600 ~/.ssh/deploy_key
           printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
           chmod 600 ~/.ssh/known_hosts
-          printf '%s\n' "$ENV_FILE" > .env
-          chmod 600 .env
-          for key in POSTGRES_DB POSTGRES_USER POSTGRES_PASSWORD Jwt__SigningKey Admin__Username Admin__PasswordHash Max__BotToken Max__WebhookSecret MINIO_ROOT_USER MINIO_ROOT_PASSWORD Minio__AccessKey Minio__SecretKey Minio__BucketName Minio__PublicBaseUrl API_DOMAIN ADMIN_DOMAIN WEBAPP_DOMAIN; do
-            if ! grep -Eq "^${key}=.+" .env; then
-              echo "::error::Missing nonempty .env setting: $key"
-              exit 1
-            fi
-          done
-          if ! grep -Eq '^Minio__PublicBaseUrl=https://' .env || grep -Eq '^Minio__PublicBaseUrl=https://(localhost|127\.0\.0\.1)' .env; then
-            echo '::error::Minio__PublicBaseUrl must be a public HTTPS API address.'
-            exit 1
-          fi
 
       - name: Check public DNS
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          API_DOMAIN: ${{ steps.build_env.outputs.api_domain }}
+          ADMIN_DOMAIN: ${{ steps.build_env.outputs.admin_domain }}
+          WEBAPP_DOMAIN: ${{ steps.build_env.outputs.webapp_domain }}
         run: |
-          set -euo pipefail
-          for key in API_DOMAIN ADMIN_DOMAIN WEBAPP_DOMAIN; do
-            domain="$(sed -n "s/^${key}=//p" .env | tr -d '\r' | tail -n 1)"
-            addresses="$(dig +short @1.1.1.1 "$domain" A)"
-            if ! grep -Fxq "$DEPLOY_HOST" <<< "$addresses"; then
-              echo "::error::$domain does not resolve to the deployment IP yet."
-              exit 1
-            fi
-          done
+          python3 - <<'PY'
+          import os
+          import socket
+          import sys
+
+          target = os.environ["DEPLOY_HOST"]
+          for key in ("API_DOMAIN", "ADMIN_DOMAIN", "WEBAPP_DOMAIN"):
+              domain = os.environ[key]
+              try:
+                  addresses = {item[4][0] for item in socket.getaddrinfo(
+                      domain, None, family=socket.AF_INET
+                  )}
+              except socket.gaierror:
+                  addresses = set()
+              if target not in addresses:
+                  print(f"::error::{domain} does not resolve to the deployment IP yet.")
+                  sys.exit(1)
+          PY
 
       - name: Copy source to server
         env:
