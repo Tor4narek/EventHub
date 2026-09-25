@@ -1,0 +1,79 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Prepare SSH and environment
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+          ENV_FILE: ${{ secrets.ENV_FILE }}
+        run: |
+          set -euo pipefail
+          for key in DEPLOY_HOST DEPLOY_USER DEPLOY_SSH_KEY DEPLOY_KNOWN_HOSTS ENV_FILE; do
+            if [[ -z "${!key}" ]]; then
+              echo "::error::Missing GitHub secret: $key"
+              exit 1
+            fi
+          done
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+          printf '%s\n' "$ENV_FILE" > .env
+          chmod 600 .env
+          for key in POSTGRES_DB POSTGRES_USER POSTGRES_PASSWORD Jwt__SigningKey Admin__Username Admin__PasswordHash Max__BotToken Max__WebhookSecret Max__WebAppName MINIO_ROOT_USER MINIO_ROOT_PASSWORD Minio__AccessKey Minio__SecretKey Minio__BucketName Minio__PublicBaseUrl API_DOMAIN ADMIN_DOMAIN WEBAPP_DOMAIN; do
+            if ! grep -Eq "^${key}=.+" .env; then
+              echo "::error::Missing nonempty .env setting: $key"
+              exit 1
+            fi
+          done
+          if ! grep -Eq '^Minio__PublicBaseUrl=https://' .env || grep -Eq '^Minio__PublicBaseUrl=https://(localhost|127\.0\.0\.1)' .env; then
+            echo '::error::Minio__PublicBaseUrl must be a public HTTPS API address.'
+            exit 1
+          fi
+
+      - name: Copy source to server
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+        run: |
+          set -euo pipefail
+          SSH="ssh -i $HOME/.ssh/deploy_key -o StrictHostKeyChecking=yes"
+          $SSH "$DEPLOY_USER@$DEPLOY_HOST" 'mkdir -p /opt/eventhub/app'
+          rsync -az --delete \
+            --exclude '.git/' --exclude '.env' \
+            --exclude 'node_modules/' --exclude 'dist/' \
+            --exclude 'bin/' --exclude 'obj/' \
+            -e "$SSH" ./ "$DEPLOY_USER@$DEPLOY_HOST:/opt/eventhub/app/"
+          scp -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes \
+            .env "$DEPLOY_USER@$DEPLOY_HOST:/opt/eventhub/app/.env"
+          $SSH "$DEPLOY_USER@$DEPLOY_HOST" 'chmod 600 /opt/eventhub/app/.env'
+
+      - name: Build and start all services
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes \
+            "$DEPLOY_USER@$DEPLOY_HOST" \
+            'cd /opt/eventhub/app && docker compose --profile production config --quiet && COMPOSE_PARALLEL_LIMIT=1 docker compose --profile production build && docker compose --profile production up -d --wait && docker compose --profile production ps'
