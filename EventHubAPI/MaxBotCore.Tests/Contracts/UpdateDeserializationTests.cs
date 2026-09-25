@@ -15,6 +15,23 @@ public sealed class UpdateDeserializationTests
 	private static readonly JsonSerializerOptions Json = MaxJsonSerializerOptions.Default;
 
 	[Fact]
+	public void MessageCreated_deserializes_when_update_type_is_last()
+	{
+		const string json = """
+		{
+			"timestamp": 1737500130100,
+			"message": { "sender": { "user_id": 42, "is_bot": false }, "body": { "text": "Привет" } },
+			"update_type": "message_created"
+		}
+		""";
+
+		var update = JsonSerializer.Deserialize<MaxUpdate>(json, Json);
+
+		update.Should().BeOfType<MessageCreatedUpdate>();
+		((MessageCreatedUpdate)update!).Message.Sender!.UserId.Should().Be(42);
+	}
+
+	[Fact]
 	public void MessageCreated_deserializes_to_MessageCreatedUpdate()
 	{
 		const string json = """

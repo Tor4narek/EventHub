@@ -17,6 +17,7 @@ public static class MaxJsonSerializerOptions
         var options = new JsonSerializerOptions
         {
             PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
+            AllowOutOfOrderMetadataProperties = true,
             DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
             // Не экранируем не-ASCII символы. Мы отправляем JSON как application/json,
             // а не встраиваем его в HTML — экранирование не нужно и мешает читать логи.
