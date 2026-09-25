@@ -11,5 +11,6 @@ public record EventSearchFilter(
 	DateOnly? To = null,
 	string? Format = null,
 	EventStatus? Status = null,
-	bool? TagsConfirmed = null
+	bool? TagsConfirmed = null,
+	bool AllDates = false
 );

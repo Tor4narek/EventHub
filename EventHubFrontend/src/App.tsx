@@ -294,7 +294,7 @@ export default function App() {
   const appliedTags = tagsEnabled ? selectedTags : [];
   const range = useMemo(() => {
     if (selectedDay && page === 'catalog') return { from: selectedDay, to: selectedDay };
-    if (period === 'all') return {};
+    if (period === 'all') return { allDates: true };
     const start = new Date(referenceDate.getFullYear(), referenceDate.getMonth(), referenceDate.getDate());
     const end = new Date(start);
     if (period === 'week') end.setDate(end.getDate() + 6);
@@ -313,7 +313,7 @@ export default function App() {
     request.then(setResult).catch(err => { if (!controller.signal.aborted) setError(err instanceof Error ? err.message : 'Не удалось загрузить мероприятия'); })
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
-  }, [page, query, range.from, range.to, format, selectedTags.join(','), tagsEnabled, reload, authStatus, token]);
+  }, [page, query, range.from, range.to, range.allDates, format, selectedTags.join(','), tagsEnabled, reload, authStatus, token]);
 
   const navigate = useCallback((next: Page) => { setDetail(null); setFilterOpen(false); setCalendarOpen(false); if (next === 'catalog') setSearch(''); setPage(next); }, []);
   useEffect(() => {

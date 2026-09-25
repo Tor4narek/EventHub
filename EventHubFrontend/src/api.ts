@@ -33,6 +33,7 @@ export interface EventFilters {
   search?: string;
   from?: string;
   to?: string;
+  allDates?: boolean;
   format?: string;
   tags?: string[];
 }
@@ -96,6 +97,7 @@ export function getEvents(page: number, filters: EventFilters, signal?: AbortSig
   if (filters.search) query.set('Search', filters.search);
   if (filters.from) query.set('From', filters.from);
   if (filters.to) query.set('To', filters.to);
+  if (filters.allDates) query.set('AllDates', 'true');
   if (filters.format) query.set('Format', filters.format);
   filters.tags?.forEach(tag => query.append('Tags', tag));
   return getJson<PagedEvents>(`/api/events?${query}`, signal);

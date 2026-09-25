@@ -125,7 +125,9 @@ public class EventService : IEventService
 		var moscowTimeZone = TimeZoneInfo.FindSystemTimeZoneById("Europe/Moscow");
 		var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, moscowTimeZone));
 		var from = publishedOnly && (filter.From is null || filter.From < today) ? today : filter.From;
-		var to = publishedOnly ? filter.To ?? (from ?? today).AddMonths(1).AddDays(-1) : filter.To;
+		var to = publishedOnly && !filter.AllDates
+			? filter.To ?? (from ?? today).AddMonths(1).AddDays(-1)
+			: filter.To;
 		if (from is not null && to is not null && to < from)
 		{
 			throw new ArgumentException("Конец периода должен быть не раньше начала.");

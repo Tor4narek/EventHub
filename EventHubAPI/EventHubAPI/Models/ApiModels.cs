@@ -41,9 +41,10 @@ public record EventSearchRequest
 	public string? Format { get; init; }
 	public EventStatus? Status { get; init; }
 	public bool? TagsConfirmed { get; init; }
+	public bool AllDates { get; init; }
 
 	public EventSearchFilter ToFilter() => new(
-		Page, PageSize, Tags, Search, From, To, Format, Status, TagsConfirmed);
+		Page, PageSize, Tags, Search, From, To, Format, Status, TagsConfirmed, AllDates);
 }
 
 public record MaxLoginRequest(string InitData);
