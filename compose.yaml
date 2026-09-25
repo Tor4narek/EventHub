@@ -61,6 +61,11 @@ services:
       - "127.0.0.1:${ADMIN_PORT:-8457}:80"
     depends_on:
       - api
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/api/max/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
 
   webapp:
     build: ./EventHubFrontend
@@ -73,7 +78,7 @@ services:
     depends_on:
       - api
     healthcheck:
-      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/health"]
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/api/max/health"]
       interval: 30s
       timeout: 3s
       retries: 3
