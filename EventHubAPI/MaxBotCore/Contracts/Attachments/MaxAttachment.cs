@@ -4,12 +4,13 @@ namespace MaxBotCore.Contracts.Attachments;
 
 /// <summary>
 /// Базовый класс вложения к сообщению MAX. Тип различается по полю "type".
-/// Пока используем только два типа: inline_keyboard (кнопки) и image (картинки).
-/// При необходимости легко добавить video, audio, file, share и т.д.
+/// Известные типы: inline_keyboard (кнопки) и image (картинки).
+/// Неизвестные типы в ответах MAX читаются как базовое вложение.
 /// </summary>
-[JsonPolymorphic(TypeDiscriminatorPropertyName = "type", UnknownDerivedTypeHandling = JsonUnknownDerivedTypeHandling.FallBackToNearestAncestor)]
+[JsonPolymorphic(TypeDiscriminatorPropertyName = "type", IgnoreUnrecognizedTypeDiscriminators = true,
+    UnknownDerivedTypeHandling = JsonUnknownDerivedTypeHandling.FallBackToBaseType)]
 [JsonDerivedType(typeof(InlineKeyboardAttachment), "inline_keyboard")]
 [JsonDerivedType(typeof(ImageAttachment), "image")]
-public abstract class MaxAttachment
+public class MaxAttachment
 {
 }
