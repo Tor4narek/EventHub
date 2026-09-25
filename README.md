@@ -60,8 +60,9 @@ MinIO API — `9500`, MinIO Console — `9501`. Все они привязаны
 Инструкция по Ubuntu, GitHub Actions, DNS, сертификатам и настройке MAX — в
 `deploy/README.md`. Production-профиль запускает Caddy, который выдаёт HTTPS
 для трёх доменов. В корневом `.env` для сервера задайте `API_DOMAIN`,
-`ADMIN_DOMAIN`, `WEBAPP_DOMAIN`, `Max__WebhookSecret`, `Max__WebAppName` и
-`Minio__PublicBaseUrl=https://<API_DOMAIN>`. `.env` не хранится в Git.
+`ADMIN_DOMAIN`, `WEBAPP_DOMAIN`, `Max__WebhookSecret` и
+`Minio__PublicBaseUrl=https://<API_DOMAIN>`. После подключения мини-приложения
+к боту дополнительно заполните `Max__WebAppName`. `.env` не хранится в Git.
 
 Тесты API: `dotnet test EventHubAPI/EventHubAPI.sln`. Локальные сборки фронтов:
 `npm ci && npm run build` в каждой из двух фронтовых папок.

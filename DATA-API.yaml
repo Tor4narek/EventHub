@@ -1,4 +1,4 @@
-# DATA-API 1.0. Replace the base URL with the public HTTPS address before submission.
+# DATA-API 1.0. The public API address must remain available during evaluation.
 # Do not put passwords, JWTs, MAX initData, or other secrets in this file.
 schemaVersion: "1.0"
 
@@ -6,7 +6,7 @@ solution:
   name: "EventHub"
 
 api:
-  baseUrl: "https://api.example.org"
+  baseUrl: "https://api.eventhub.faberlab.tech"
   defaultHeaders:
     Accept: "application/json"
 

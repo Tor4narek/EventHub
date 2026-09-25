@@ -40,7 +40,7 @@ jobs:
           chmod 600 ~/.ssh/known_hosts
           printf '%s\n' "$ENV_FILE" > .env
           chmod 600 .env
-          for key in POSTGRES_DB POSTGRES_USER POSTGRES_PASSWORD Jwt__SigningKey Admin__Username Admin__PasswordHash Max__BotToken Max__WebhookSecret Max__WebAppName MINIO_ROOT_USER MINIO_ROOT_PASSWORD Minio__AccessKey Minio__SecretKey Minio__BucketName Minio__PublicBaseUrl API_DOMAIN ADMIN_DOMAIN WEBAPP_DOMAIN; do
+          for key in POSTGRES_DB POSTGRES_USER POSTGRES_PASSWORD Jwt__SigningKey Admin__Username Admin__PasswordHash Max__BotToken Max__WebhookSecret MINIO_ROOT_USER MINIO_ROOT_PASSWORD Minio__AccessKey Minio__SecretKey Minio__BucketName Minio__PublicBaseUrl API_DOMAIN ADMIN_DOMAIN WEBAPP_DOMAIN; do
             if ! grep -Eq "^${key}=.+" .env; then
               echo "::error::Missing nonempty .env setting: $key"
               exit 1
@@ -50,6 +50,20 @@ jobs:
             echo '::error::Minio__PublicBaseUrl must be a public HTTPS API address.'
             exit 1
           fi
+
+      - name: Check public DNS
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+        run: |
+          set -euo pipefail
+          for key in API_DOMAIN ADMIN_DOMAIN WEBAPP_DOMAIN; do
+            domain="$(sed -n "s/^${key}=//p" .env | tr -d '\r' | tail -n 1)"
+            addresses="$(dig +short @1.1.1.1 "$domain" A)"
+            if ! grep -Fxq "$DEPLOY_HOST" <<< "$addresses"; then
+              echo "::error::$domain does not resolve to the deployment IP yet."
+              exit 1
+            fi
+          done
 
       - name: Copy source to server
         env:

@@ -41,8 +41,9 @@ using GitHub Actions. Docker group membership takes effect on a new login.
 
 ## 2. DNS and environment
 
-Create three DNS `A` records pointing to the server IP: one each for the API,
-admin frontend, and MAX WebApp. Fill the root `.env` from `.env.example`:
+Create three DNS `A` records pointing to `185.185.68.210`: `api.eventhub.faberlab.tech`,
+`admin.eventhub.faberlab.tech`, and `eventhub.faberlab.tech`. Fill the root
+`.env` from `.env.example`:
 
 - `API_DOMAIN`, `ADMIN_DOMAIN`, `WEBAPP_DOMAIN`: bare domain names, without
   `https://` or path.
@@ -50,7 +51,9 @@ admin frontend, and MAX WebApp. Fill the root `.env` from `.env.example`:
   API, while MinIO itself stays private.
 - `Max__WebhookSecret`: a new random value accepted by MAX; for example,
   `openssl rand -hex 32`.
-- `Max__WebAppName`: the name of the WebApp connected to the bot in MAX.
+- `Max__WebAppName`: the name of the WebApp connected to the bot in MAX. Leave
+  it empty until the WebApp is registered; fill it and update the `ENV_FILE`
+  GitHub secret before enabling the bot's WebApp button.
 - PostgreSQL, MinIO, JWT, admin password hash, and bot token settings must be
   filled. `Minio__AccessKey` must match `MINIO_ROOT_USER`, and
   `Minio__SecretKey` must match `MINIO_ROOT_PASSWORD`.
@@ -71,7 +74,11 @@ In the new monorepo, set these repository secrets:
 | `DEPLOY_KNOWN_HOSTS` | Verified SSH host-key line for the server |
 | `ENV_FILE` | Entire contents of the root production `.env` |
 
-Get a host-key line with `ssh-keyscan -H <server-ip>`, and compare its
+Set `DEPLOY_HOST` to `185.185.68.210`. The workflow checks that all three
+domains resolve to this IP before copying files to the server. Verify DNS with
+`nslookup api.eventhub.faberlab.tech 1.1.1.1` and the other two domains.
+
+Get a host-key line with `ssh-keyscan -H 185.185.68.210`, and compare its
 fingerprint against `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub` run on the
 server. Do not paste private keys or `.env` into Git. The workflow validates
 required settings, copies the source over SSH, builds all images on the server,
