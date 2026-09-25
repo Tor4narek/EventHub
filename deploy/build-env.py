@@ -1,4 +1,4 @@
-"""Build the production Compose environment from public defaults and CI secrets."""
+"""Build the production Compose environment from GitHub Actions secrets."""
 
 import os
 import re
@@ -23,24 +23,39 @@ def quote(value: str) -> str:
     return "'" + value.replace("\\", "\\\\").replace("'", "\\'") + "'"
 
 
-settings: dict[str, str] = {}
-for line in (ROOT / ".env.example").read_text(encoding="utf-8").splitlines():
-    if not line or line.startswith("#"):
-        continue
-    key, separator, value = line.partition("=")
-    if separator:
-        settings[key] = value
-
-for variable, key in (
-    ("API_DOMAIN", "API_DOMAIN"),
-    ("ADMIN_DOMAIN", "ADMIN_DOMAIN"),
-    ("WEBAPP_DOMAIN", "WEBAPP_DOMAIN"),
-    ("ADMIN_USERNAME", "Admin__Username"),
-    ("MINIO_ROOT_USER", "MINIO_ROOT_USER"),
-    ("MAX_WEBAPP_NAME", "Max__WebAppName"),
-):
-    if os.environ.get(variable):
-        settings[key] = os.environ[variable]
+SETTINGS = (
+    "ADMIN_DOMAIN",
+    "ADMIN_PORT",
+    "ADMIN__PASSWORDHASH",
+    "ADMIN__USERNAME",
+    "API_DOMAIN",
+    "API_PORT",
+    "JWT__AUDIENCE",
+    "JWT__ISSUER",
+    "JWT__SIGNINGKEY",
+    "MAX__APIBASEURL",
+    "MAX__BOTTOKEN",
+    "MAX__WEBHOOKSECRET",
+    "MINIO_API_PORT",
+    "MINIO_CONSOLE_PORT",
+    "MINIO_ROOT_PASSWORD",
+    "MINIO_ROOT_USER",
+    "MINIO__ACCESSKEY",
+    "MINIO__BUCKETNAME",
+    "MINIO__ENDPOINT",
+    "MINIO__PUBLICBASEURL",
+    "MINIO__SECRETKEY",
+    "MINIO__USESSL",
+    "POSTGRES_DB",
+    "POSTGRES_HOST",
+    "POSTGRES_PASSWORD",
+    "POSTGRES_PORT",
+    "POSTGRES_USER",
+    "SWAGGER__ENABLED",
+    "WEBAPP_DOMAIN",
+    "WEBAPP_PORT",
+)
+settings = {name: required(name) for name in SETTINGS}
 
 domains = [settings[key] for key in ("API_DOMAIN", "ADMIN_DOMAIN", "WEBAPP_DOMAIN")]
 if len(set(domains)) != 3 or any(
@@ -48,20 +63,10 @@ if len(set(domains)) != 3 or any(
 ):
     raise SystemExit("Set three distinct domain names without schemes or paths")
 
-settings["POSTGRES_PASSWORD"] = required("POSTGRES_PASSWORD")
-settings["Jwt__SigningKey"] = required("JWT_SIGNING_KEY")
-settings["Admin__PasswordHash"] = required("ADMIN_PASSWORD_HASH")
-settings["Max__BotToken"] = required("MAX_BOT_TOKEN")
-settings["Max__WebhookSecret"] = required("MAX_WEBHOOK_SECRET")
-settings["MINIO_ROOT_PASSWORD"] = required("MINIO_ROOT_PASSWORD")
-settings["Minio__AccessKey"] = settings["MINIO_ROOT_USER"]
-settings["Minio__SecretKey"] = settings["MINIO_ROOT_PASSWORD"]
-settings["Minio__PublicBaseUrl"] = f"https://{settings['API_DOMAIN']}"
-
-if len(settings["Jwt__SigningKey"].encode("utf-8")) < 32:
-    raise SystemExit("JWT_SIGNING_KEY must contain at least 32 bytes")
-if not re.fullmatch(r"[A-Za-z0-9_-]{5,256}", settings["Max__WebhookSecret"]):
-    raise SystemExit("MAX_WEBHOOK_SECRET has an invalid format")
+if len(settings["JWT__SIGNINGKEY"].encode("utf-8")) < 32:
+    raise SystemExit("JWT__SIGNINGKEY must contain at least 32 bytes")
+if not re.fullmatch(r"[A-Za-z0-9_-]{5,256}", settings["MAX__WEBHOOKSECRET"]):
+    raise SystemExit("MAX__WEBHOOKSECRET has an invalid format")
 
 OUTPUT.parent.mkdir(parents=True, exist_ok=True)
 descriptor = os.open(OUTPUT, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)

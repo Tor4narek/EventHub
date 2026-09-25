@@ -43,21 +43,20 @@ using GitHub Actions. Docker group membership takes effect on a new login.
 
 Create three DNS `A` records pointing to `185.185.68.210`: `api.eventhub.faberlab.tech`,
 `admin.eventhub.faberlab.tech`, and `eventhub.faberlab.tech`. GitHub Actions
-builds the server's `.env` from the committed `.env.example` and individual
-GitHub secrets; do not upload your local `.env`:
+builds the server's `.env` from GitHub repository secrets; do not upload your
+local `.env`:
 
 - `API_DOMAIN`, `ADMIN_DOMAIN`, `WEBAPP_DOMAIN`: bare domain names, without
   `https://` or path.
-- `Minio__PublicBaseUrl=https://<API_DOMAIN>`: images are served through the
+- `MINIO__PUBLICBASEURL=https://<API_DOMAIN>`: images are served through the
   API, while MinIO itself stays private.
-- `Max__WebhookSecret`: a new random value accepted by MAX; for example,
+- `MAX__WEBHOOKSECRET`: a new random value accepted by MAX; for example,
   `openssl rand -hex 32`.
-- `Max__WebAppName`: the name of the WebApp connected to the bot in MAX. Leave
-  it empty until the WebApp is registered; then set the `MAX_WEBAPP_NAME`
-  repository variable before enabling the bot's WebApp button.
+- The MAX WebApp name is not configured until the WebApp is connected to the
+  bot in MAX.
 - PostgreSQL, MinIO, JWT, admin password hash, and bot token settings must be
-  filled. `Minio__AccessKey` must match `MINIO_ROOT_USER`, and
-  `Minio__SecretKey` must match `MINIO_ROOT_PASSWORD`.
+  filled. `MINIO__ACCESSKEY` must match `MINIO_ROOT_USER`, and
+  `MINIO__SECRETKEY` must match `MINIO_ROOT_PASSWORD`.
 
 The user-facing frontends call `/api` on their own origin, and their Nginx
 containers proxy it to the API on the Compose network. `VITE_API_BASE_URL` is
@@ -65,28 +64,28 @@ therefore not needed for this deployment.
 
 ## 3. GitHub Actions secrets
 
-In the new monorepo, set these repository secrets:
+In the monorepo, set these repository secrets. The workflow uses their names
+exactly as shown; it does not read repository variables or `.env.example`:
 
 | Secret | Value |
 | --- | --- |
 | `DEPLOY_HOST` | `185.185.68.210` |
-| `DEPLOY_USER` | `deploy` |
-| `DEPLOY_SSH_KEY` | Private key for the `deploy` account |
+| `DEPLOY_USER` | SSH account (`deploy` or `root`) |
+| `DEPLOY_SSH_KEY` | Private key for that account |
 | `DEPLOY_KNOWN_HOSTS` | Verified SSH host-key line for the server |
-| `POSTGRES_PASSWORD` | Value of local `POSTGRES_PASSWORD` |
-| `JWT_SIGNING_KEY` | Value of local `Jwt__SigningKey` |
-| `ADMIN_PASSWORD_HASH` | Value of local `Admin__PasswordHash` |
-| `MAX_BOT_TOKEN` | Value of local `Max__BotToken` |
-| `MAX_WEBHOOK_SECRET` | Value of local `Max__WebhookSecret` |
-| `MINIO_ROOT_PASSWORD` | Value of local `MINIO_ROOT_PASSWORD` |
+| `API_DOMAIN`, `ADMIN_DOMAIN`, `WEBAPP_DOMAIN` | Three bare domain names |
+| `API_PORT`, `ADMIN_PORT`, `WEBAPP_PORT` | Published application ports |
+| `ADMIN__USERNAME`, `ADMIN__PASSWORDHASH` | Admin login and password hash |
+| `JWT__ISSUER`, `JWT__AUDIENCE`, `JWT__SIGNINGKEY` | JWT settings; signing key at least 32 bytes |
+| `MAX__APIBASEURL`, `MAX__BOTTOKEN`, `MAX__WEBHOOKSECRET` | MAX settings |
+| `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_HOST`, `POSTGRES_PORT` | Database settings |
+| `MINIO_ROOT_USER`, `MINIO_ROOT_PASSWORD`, `MINIO_API_PORT`, `MINIO_CONSOLE_PORT` | MinIO server settings |
+| `MINIO__ACCESSKEY`, `MINIO__SECRETKEY`, `MINIO__BUCKETNAME`, `MINIO__ENDPOINT`, `MINIO__PUBLICBASEURL`, `MINIO__USESSL` | MinIO client settings |
+| `SWAGGER__ENABLED` | Whether Swagger is available |
 
-No `ENV_FILE` secret is used. `Minio__AccessKey` is copied from
-`MINIO_ROOT_USER`, and `Minio__SecretKey` is copied from
-`MINIO_ROOT_PASSWORD` during generation. Public defaults and domains come from
-`.env.example`. Optional repository variables `API_DOMAIN`, `ADMIN_DOMAIN`,
-`WEBAPP_DOMAIN`, `ADMIN_USERNAME`, `MINIO_ROOT_USER`, and `MAX_WEBAPP_NAME`
-override those defaults. Leave `MAX_WEBAPP_NAME` unset until the WebApp is
-connected to the bot.
+Compose replaces `POSTGRES_HOST`, `POSTGRES_PORT`, and `MINIO__ENDPOINT` inside
+the API container with the Docker-network addresses. Their secrets can hold
+local development addresses without breaking container communication.
 
 Set `DEPLOY_HOST` to `185.185.68.210`. The workflow checks that all three
 domains resolve to this IP before copying files to the server. Verify DNS with
@@ -111,7 +110,7 @@ curl -I https://<WEBAPP_DOMAIN>/health
 ```
 
 Register the MAX webhook as `https://<API_DOMAIN>/api/max/webhook` and use the
-same `Max__WebhookSecret` when creating the subscription. Set the MAX WebApp URL
+same `MAX__WEBHOOKSECRET` when creating the subscription. Set the MAX WebApp URL
 to `https://<WEBAPP_DOMAIN>/`. The API applies existing EF migrations when it
 starts. Keep one API replica because the bot scheduler runs inside it.
 

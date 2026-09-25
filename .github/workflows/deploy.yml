@@ -21,18 +21,36 @@ jobs:
       - name: Build deployment environment
         id: build_env
         env:
-          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
-          JWT_SIGNING_KEY: ${{ secrets.JWT_SIGNING_KEY }}
-          ADMIN_PASSWORD_HASH: ${{ secrets.ADMIN_PASSWORD_HASH }}
-          MAX_BOT_TOKEN: ${{ secrets.MAX_BOT_TOKEN }}
-          MAX_WEBHOOK_SECRET: ${{ secrets.MAX_WEBHOOK_SECRET }}
+          ADMIN_DOMAIN: ${{ secrets.ADMIN_DOMAIN }}
+          ADMIN_PORT: ${{ secrets.ADMIN_PORT }}
+          ADMIN__PASSWORDHASH: ${{ secrets.ADMIN__PASSWORDHASH }}
+          ADMIN__USERNAME: ${{ secrets.ADMIN__USERNAME }}
+          API_DOMAIN: ${{ secrets.API_DOMAIN }}
+          API_PORT: ${{ secrets.API_PORT }}
+          JWT__AUDIENCE: ${{ secrets.JWT__AUDIENCE }}
+          JWT__ISSUER: ${{ secrets.JWT__ISSUER }}
+          JWT__SIGNINGKEY: ${{ secrets.JWT__SIGNINGKEY }}
+          MAX__APIBASEURL: ${{ secrets.MAX__APIBASEURL }}
+          MAX__BOTTOKEN: ${{ secrets.MAX__BOTTOKEN }}
+          MAX__WEBHOOKSECRET: ${{ secrets.MAX__WEBHOOKSECRET }}
+          MINIO_API_PORT: ${{ secrets.MINIO_API_PORT }}
+          MINIO_CONSOLE_PORT: ${{ secrets.MINIO_CONSOLE_PORT }}
           MINIO_ROOT_PASSWORD: ${{ secrets.MINIO_ROOT_PASSWORD }}
-          API_DOMAIN: ${{ vars.API_DOMAIN }}
-          ADMIN_DOMAIN: ${{ vars.ADMIN_DOMAIN }}
-          WEBAPP_DOMAIN: ${{ vars.WEBAPP_DOMAIN }}
-          ADMIN_USERNAME: ${{ vars.ADMIN_USERNAME }}
-          MINIO_ROOT_USER: ${{ vars.MINIO_ROOT_USER }}
-          MAX_WEBAPP_NAME: ${{ vars.MAX_WEBAPP_NAME }}
+          MINIO_ROOT_USER: ${{ secrets.MINIO_ROOT_USER }}
+          MINIO__ACCESSKEY: ${{ secrets.MINIO__ACCESSKEY }}
+          MINIO__BUCKETNAME: ${{ secrets.MINIO__BUCKETNAME }}
+          MINIO__ENDPOINT: ${{ secrets.MINIO__ENDPOINT }}
+          MINIO__PUBLICBASEURL: ${{ secrets.MINIO__PUBLICBASEURL }}
+          MINIO__SECRETKEY: ${{ secrets.MINIO__SECRETKEY }}
+          MINIO__USESSL: ${{ secrets.MINIO__USESSL }}
+          POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
+          POSTGRES_HOST: ${{ secrets.POSTGRES_HOST }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          POSTGRES_PORT: ${{ secrets.POSTGRES_PORT }}
+          POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
+          SWAGGER__ENABLED: ${{ secrets.SWAGGER__ENABLED }}
+          WEBAPP_DOMAIN: ${{ secrets.WEBAPP_DOMAIN }}
+          WEBAPP_PORT: ${{ secrets.WEBAPP_PORT }}
         run: python3 deploy/build-env.py
 
       - name: Prepare SSH
