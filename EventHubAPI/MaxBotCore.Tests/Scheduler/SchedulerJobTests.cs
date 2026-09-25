@@ -38,6 +38,96 @@ public sealed class SchedulerJobTests
 	}
 
 	[Fact]
+	public async Task Weekly_job_does_not_repeat_partial_digest_after_send_failure()
+	{
+		var user = new User { Id = Guid.NewGuid(), MaxUserId = 42, IsWeeklyDigestEnabled = true };
+		var users = new Mock<IUserService>();
+		users.Setup(x => x.GetWeeklyDigestSubscribersAsync(It.IsAny<DateTime>(), 100,
+			It.IsAny<CancellationToken>())).ReturnsAsync([user]);
+		users.SetupSequence(x => x.TryClaimWeeklyDigestAsync(user.Id, It.IsAny<DateTime>(),
+			It.IsAny<DateTime>(), It.IsAny<CancellationToken>())).ReturnsAsync(true).ReturnsAsync(false);
+		var recommendations = new Mock<IRecomendationService>();
+		recommendations.Setup(x => x.GetTopEventsAsync(user.Id, 3, It.IsAny<DateTime>(),
+			It.IsAny<DateTime>(), It.IsAny<CancellationToken>())).ReturnsAsync(
+			[new Event { Id = Guid.NewGuid(), Title = "Лекция", Description = "Описание",
+				Location = "ИТМО", Source = "https://example.com", EventDateTime = DateTime.UtcNow.AddDays(3) }]);
+		var max = new Mock<IMaxBotClient>();
+		max.Setup(x => x.SendMessageToUserAsync(42, It.IsAny<string?>(),
+			It.IsAny<IReadOnlyList<MaxAttachment>?>(), null, true, It.IsAny<CancellationToken>()))
+			.ThrowsAsync(new HttpRequestException("Ответ MAX потерян"));
+		var job = new WeeklyDigestJob(users.Object, recommendations.Object, max.Object,
+			NullLogger<WeeklyDigestJob>.Instance);
+		var sunday = new DateTime(2026, 9, 26, 22, 0, 0, DateTimeKind.Utc);
+
+		await job.RunAsync(sunday, CancellationToken.None);
+		await job.RunAsync(sunday, CancellationToken.None);
+
+		max.Verify(x => x.SendMessageToUserAsync(42, It.IsAny<string?>(),
+			It.IsAny<IReadOnlyList<MaxAttachment>?>(), null, true, It.IsAny<CancellationToken>()), Times.Once);
+		users.Verify(x => x.ReleaseWeeklyDigestClaimAsync(It.IsAny<Guid>(),
+			It.IsAny<DateTime>(), It.IsAny<CancellationToken>()), Times.Never);
+	}
+
+	[Fact]
+	public async Task Reminder_job_sends_today_event_once_after_late_save()
+	{
+		var now = new DateTime(2026, 9, 25, 12, 0, 0, DateTimeKind.Utc);
+		var saved = new UserEvent
+		{
+			UserId = Guid.NewGuid(), EventId = Guid.NewGuid(),
+			User = new User { MaxUserId = 42 },
+			Event = new Event { Title = "Лекция", Source = "https://example.com",
+				EventDateTime = now.AddMinutes(30) }
+		};
+		var events = new Mock<IUserEventService>();
+		events.Setup(x => x.GetDueRemindersAsync(now, now.AddDays(1), 100,
+			It.IsAny<CancellationToken>())).ReturnsAsync([saved]);
+		events.SetupSequence(x => x.TryClaimReminderAsync(saved.UserId, saved.EventId,
+			It.IsAny<DateTime>(), It.IsAny<CancellationToken>())).ReturnsAsync(true).ReturnsAsync(false);
+		var max = CreateMaxClient();
+		var job = new ReminderJob(events.Object, max.Object, NullLogger<ReminderJob>.Instance);
+
+		await job.RunAsync(now, CancellationToken.None);
+		await job.RunAsync(now, CancellationToken.None);
+
+		events.Verify(x => x.GetDueRemindersAsync(now, now.AddDays(1), 100,
+			It.IsAny<CancellationToken>()), Times.Exactly(2));
+		max.Verify(x => x.SendMessageToUserAsync(42, It.Is<string?>(s => s!.Contains("сегодня")),
+			It.IsAny<IReadOnlyList<MaxAttachment>?>(), null, true, It.IsAny<CancellationToken>()), Times.Once);
+	}
+
+	[Fact]
+	public async Task Reminder_job_does_not_retry_after_ambiguous_send_failure()
+	{
+		var now = DateTime.UtcNow;
+		var saved = new UserEvent
+		{
+			UserId = Guid.NewGuid(), EventId = Guid.NewGuid(),
+			User = new User { MaxUserId = 42 },
+			Event = new Event { Title = "Лекция", Source = "https://example.com",
+				EventDateTime = now.AddHours(2) }
+		};
+		var events = new Mock<IUserEventService>();
+		events.Setup(x => x.GetDueRemindersAsync(It.IsAny<DateTime>(), It.IsAny<DateTime>(),
+			100, It.IsAny<CancellationToken>())).ReturnsAsync([saved]);
+		events.SetupSequence(x => x.TryClaimReminderAsync(saved.UserId, saved.EventId,
+			It.IsAny<DateTime>(), It.IsAny<CancellationToken>())).ReturnsAsync(true).ReturnsAsync(false);
+		var max = new Mock<IMaxBotClient>();
+		max.Setup(x => x.SendMessageToUserAsync(42, It.IsAny<string?>(),
+			It.IsAny<IReadOnlyList<MaxAttachment>?>(), null, true, It.IsAny<CancellationToken>()))
+			.ThrowsAsync(new HttpRequestException("Ответ MAX потерян"));
+		var job = new ReminderJob(events.Object, max.Object, NullLogger<ReminderJob>.Instance);
+
+		await job.RunAsync(now, CancellationToken.None);
+		await job.RunAsync(now, CancellationToken.None);
+
+		max.Verify(x => x.SendMessageToUserAsync(42, It.IsAny<string?>(),
+			It.IsAny<IReadOnlyList<MaxAttachment>?>(), null, true, It.IsAny<CancellationToken>()), Times.Once);
+		events.Verify(x => x.ReleaseReminderClaimAsync(It.IsAny<Guid>(), It.IsAny<Guid>(),
+			It.IsAny<DateTime>(), It.IsAny<CancellationToken>()), Times.Never);
+	}
+
+	[Fact]
 	public async Task Reminder_job_skips_already_claimed_reminder()
 	{
 		var saved = new UserEvent

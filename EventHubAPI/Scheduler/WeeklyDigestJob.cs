@@ -35,28 +35,33 @@ public sealed class WeeklyDigestJob
 			{
 				var claimedAt = DateTime.UtcNow;
 				if (!await _users.TryClaimWeeklyDigestAsync(user.Id, weekStart, claimedAt, cancellationToken)) continue;
+				var sendStarted = false;
 				try
 				{
 					var events = await _recommendations.GetTopEventsAsync(user.Id, 3, from, to, cancellationToken);
 					if (events.Count == 0) continue;
+					sendStarted = true;
 					await _max.SendMessageToUserAsync(user.MaxUserId, "Подборка мероприятий на следующую неделю:",
-						cancellationToken: cancellationToken);
+						cancellationToken: CancellationToken.None);
 					foreach (var item in events)
 					{
-						await Task.Delay(TimeSpan.FromMilliseconds(550), cancellationToken);
+						await Task.Delay(TimeSpan.FromMilliseconds(550), CancellationToken.None);
 						var card = BotMessageFactory.EventCard(item);
 						await _max.SendMessageToUserAsync(user.MaxUserId, card.Text, card.Attachments,
-							cancellationToken: cancellationToken);
+							cancellationToken: CancellationToken.None);
 					}
 				}
 				catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
 				{
+					if (!sendStarted)
+						await _users.ReleaseWeeklyDigestClaimAsync(user.Id, claimedAt, CancellationToken.None);
 					throw;
 				}
 				catch (Exception ex)
 				{
-					await _users.ReleaseWeeklyDigestClaimAsync(user.Id, claimedAt, cancellationToken);
-					_logger.LogError(ex, "Не удалось отправить недельную подборку пользователю {UserId}", user.Id);
+					if (!sendStarted)
+						await _users.ReleaseWeeklyDigestClaimAsync(user.Id, claimedAt, cancellationToken);
+					_logger.LogError(ex, "Не удалось подготовить или отправить недельную подборку пользователю {UserId}; повтор после начала отправки не выполняется", user.Id);
 					failed = true;
 				}
 			}

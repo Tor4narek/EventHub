@@ -19,24 +19,26 @@ public sealed class ReminderJob
 
 	public async Task RunAsync(DateTime utcNow, CancellationToken cancellationToken)
 	{
-		var (from, to) = BotSchedule.Tomorrow(utcNow);
+		var from = utcNow;
+		var to = utcNow.AddDays(1);
 		while (true)
 		{
 			var batch = await _savedEvents.GetDueRemindersAsync(from, to, 100, cancellationToken);
 			if (batch.Count == 0) break;
-			var failed = false;
 			foreach (var saved in batch)
 			{
+				var moscow = TimeZoneInfo.FindSystemTimeZoneById("Europe/Moscow");
+				var localNow = TimeZoneInfo.ConvertTimeFromUtc(utcNow, moscow);
+				var localTime = TimeZoneInfo.ConvertTimeFromUtc(
+					DateTime.SpecifyKind(saved.Event.EventDateTime, DateTimeKind.Utc), moscow);
+				var day = localTime.Date == localNow.Date ? "сегодня" : "завтра";
 				var claimedAt = DateTime.UtcNow;
 				if (!await _savedEvents.TryClaimReminderAsync(saved.UserId, saved.EventId, claimedAt, cancellationToken)) continue;
 				try
 				{
-					var localTime = TimeZoneInfo.ConvertTimeFromUtc(
-						DateTime.SpecifyKind(saved.Event.EventDateTime, DateTimeKind.Utc),
-						TimeZoneInfo.FindSystemTimeZoneById("Europe/Moscow"));
 					await _max.SendMessageToUserAsync(saved.User.MaxUserId,
-						$"Напоминаю: завтра в {localTime:HH:mm} МСК состоится «{saved.Event.Title}».\n{saved.Event.Source}",
-						cancellationToken: cancellationToken);
+						$"Напоминаю: {day} в {localTime:HH:mm} МСК состоится «{saved.Event.Title}».\n{saved.Event.Source}",
+						cancellationToken: CancellationToken.None);
 				}
 				catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
 				{
@@ -44,13 +46,11 @@ public sealed class ReminderJob
 				}
 				catch (Exception ex)
 				{
-					await _savedEvents.ReleaseReminderClaimAsync(saved.UserId, saved.EventId, claimedAt, cancellationToken);
-					_logger.LogError(ex, "Не удалось отправить напоминание {EventId} пользователю {UserId}",
+					_logger.LogError(ex, "Статус доставки напоминания {EventId} пользователю {UserId} неизвестен; повтор не выполняется",
 						saved.EventId, saved.UserId);
-					failed = true;
 				}
 			}
-			if (failed || batch.Count < 100) break;
+			if (batch.Count < 100) break;
 		}
 	}
 }

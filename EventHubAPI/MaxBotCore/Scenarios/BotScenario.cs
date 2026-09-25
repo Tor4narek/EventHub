@@ -91,7 +91,7 @@ public sealed class BotScenario : IBotScenario
 			case BotCommandType.Remind:
 				await _events.GetEventByIdAsync(command.EntityId!.Value, cancellationToken, EventStatus.Published);
 				await _savedEvents.SaveEventAsync(user.Id, command.EntityId.Value, cancellationToken);
-				await SendAsync(command.MaxUserId, "Мероприятие сохранено. Напомню за день до начала.", null, cancellationToken);
+				await SendAsync(command.MaxUserId, "Мероприятие сохранено. Напомню примерно за сутки до начала. Если осталось меньше суток — после ближайшей проверки, пока мероприятие не началось.", null, cancellationToken);
 				break;
 			case BotCommandType.RemoveReminder:
 				await _savedEvents.RemoveEventAsync(user.Id, command.EntityId!.Value, cancellationToken);
