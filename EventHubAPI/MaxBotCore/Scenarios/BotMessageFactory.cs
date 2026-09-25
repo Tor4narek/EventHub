@@ -67,6 +67,9 @@ public static class BotMessageFactory
 	public static InlineKeyboardAttachment MoreSaved(int offset) => Keyboard(
 		[new CallbackButton { Text = "Показать ещё", Payload = $"saved:{offset}" }]);
 
+	public static InlineKeyboardAttachment SavedEvents() => Keyboard(
+		[new CallbackButton { Text = "Сохранённые", Payload = "menu:saved" }]);
+
 	private static InlineKeyboardAttachment Keyboard(params IReadOnlyList<MaxButton>[] rows) =>
 		new() { Payload = new InlineKeyboardPayload { Buttons = rows } };
 

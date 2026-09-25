@@ -1,6 +1,7 @@
 using MaxBotCore.Client;
 using MaxBotCore.Configuration;
 using MaxBotCore.Contracts.Attachments;
+using MaxBotCore.Contracts.Attachments.Buttons;
 using MaxBotCore.Contracts.Messages;
 using MaxBotCore.Scenarios;
 using Microsoft.Extensions.Options;
@@ -75,6 +76,26 @@ public sealed class BotScenarioTests
 
 		fixture.Recommendations.Verify(x => x.GetTopEventsAsync(It.IsAny<Guid>(), It.IsAny<int>(),
 			It.IsAny<DateTime>(), It.IsAny<DateTime>(), It.IsAny<CancellationToken>()), Times.Never);
+	}
+
+	[Fact]
+	public async Task Find_events_without_new_matches_offers_saved_events()
+	{
+		var fixture = new Fixture();
+		fixture.User.HasCompletedOnboarding = true;
+		fixture.Recommendations.Setup(x => x.GetTopEventsAsync(fixture.User.Id, 3,
+			It.IsAny<DateTime>(), It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
+			.ReturnsAsync([]);
+
+		await fixture.Scenario.HandleAsync(new BotCommand(42, BotCommandType.FindEvents), CancellationToken.None);
+
+		fixture.Max.Verify(x => x.SendMessageToUserAsync(42,
+			It.Is<string?>(s => s!.Contains("Новых мероприятий")),
+			It.Is<IReadOnlyList<MaxAttachment>?>(attachments => attachments != null &&
+				attachments.OfType<InlineKeyboardAttachment>().Any(keyboard =>
+					keyboard.Payload.Buttons.SelectMany(row => row).OfType<CallbackButton>()
+						.Any(button => button.Payload == "menu:saved"))),
+			null, true, It.IsAny<CancellationToken>()), Times.Once);
 	}
 
 	[Fact]

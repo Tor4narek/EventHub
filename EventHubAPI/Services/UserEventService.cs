@@ -143,12 +143,11 @@ public class UserEventService : IUserEventService
 			throw new ArgumentException("Передан пустой id", nameof(userId));
 		}
 
-		return await _dbContext.UserEvents
+		return await _dbContext.Events
 			.AsNoTracking()
-			.Where(ue => ue.UserId == userId)
-			.OrderBy(ue => ue.Event.EventDateTime)
-			.Select(ue => ue.Event)
+			.Where(e => _dbContext.UserEvents.Any(ue => ue.UserId == userId && ue.EventId == e.Id))
 			.Include(e => e.Tags)
+			.OrderBy(e => e.EventDateTime)
 			.ToListAsync(cancellationToken);
 	}
 

@@ -131,7 +131,8 @@ public sealed class BotScenario : IBotScenario
 		var events = await _recommendations.GetTopEventsAsync(userId, 3, now, now.AddDays(7), cancellationToken);
 		if (events.Count == 0)
 		{
-			await SendAsync(maxUserId, "На ближайшие семь дней подходящих мероприятий пока нет.", null, cancellationToken);
+			await SendAsync(maxUserId, "Новых мероприятий на ближайшие семь дней пока нет. Сохранённые мероприятия можно посмотреть по кнопке ниже.",
+				[BotMessageFactory.SavedEvents()], cancellationToken);
 			return;
 		}
 		await SendEventsAsync(maxUserId, events, false, cancellationToken);
