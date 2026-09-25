@@ -11,7 +11,7 @@ type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
 
 export function Button({ variant = 'secondary', size = 'medium', stretched, loading, disabled, className, children, ...props }: ButtonProps) {
   const variants = {
-    primary: 'border-accent bg-accent text-white hover:border-[#4637e8] hover:bg-[#4637e8]',
+    primary: 'border-ink bg-ink text-white hover:border-[#323237] hover:bg-[#323237]',
     secondary: 'border-line bg-white text-ink hover:bg-soft',
     destructive: 'border-pink/25 bg-white text-pink hover:bg-pink/5',
     ghost: 'border-transparent bg-transparent text-muted hover:bg-soft',
