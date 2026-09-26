@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { getEvent, getEvents, getMe, getRecommendations, getTags, loginWithMax, mediaUrl, saveInterests, type EventResponse, type PagedEvents, type TagResponse } from './api';
-import { maxApp, observeMaxBack, openExternal } from './maxBridge';
+import { getEvent, getEvents, getMe, getRecommendations, getSavedEvents, getTags, loginWithMax, mediaUrl, removeSavedEvent, saveEvent, saveInterests, saveSettings, type EventResponse, type PagedEvents, type TagResponse } from './api';
+import { maxApp, maxInitData, observeMaxBack, openExternal } from './maxBridge';
 
 type Page = 'catalog' | 'search' | 'saved' | 'interests' | 'selection';
 type Period = 'all' | 'today' | 'week' | 'month';
@@ -61,7 +61,7 @@ function SearchField({ value, onChange, onFocus, autoFocus = false }: { value: s
   </label>;
 }
 
-function EventCard({ event, saved, onSave, onOpen, savedPage = false }: { event: EventResponse; saved: boolean; onSave: () => void; onOpen: () => void; savedPage?: boolean }) {
+function EventCard({ event, saved, onSave, onOpen, savedPage = false, localOnly = false, saving = false }: { event: EventResponse; saved: boolean; onSave: () => void; onOpen: () => void; savedPage?: boolean; localOnly?: boolean; saving?: boolean }) {
   return <article className={`event-card ${savedPage ? 'event-card-bordered' : ''}`}>
     <button className="card-main" onClick={onOpen} aria-label={`Открыть ${event.title}`}>
       <h3>{event.title}</h3>
@@ -70,8 +70,8 @@ function EventCard({ event, saved, onSave, onOpen, savedPage = false }: { event:
       <p className="event-location">{event.location}</p>
     </button>
     <div className="card-actions">
-      <span className="event-deadline">{savedPage ? 'Сохранено на этом устройстве' : deadlineText(event)}</span>
-      <button className={`save-button ${saved ? 'is-saved' : ''}`} onClick={onSave} aria-label={saved ? `Убрать из сохранённых: ${event.title}` : `Сохранить: ${event.title}`}>
+      <span className="event-deadline">{savedPage ? localOnly ? 'Только на этом устройстве · без напоминания' : 'Сохранено в профиле MAX' : deadlineText(event)}</span>
+      <button className={`save-button ${saved ? 'is-saved' : ''}`} onClick={onSave} disabled={saving} aria-label={saved ? `Убрать из сохранённых: ${event.title}` : `Сохранить: ${event.title}`}>
         <Icon src={saved ? icons.checked : icons.remind} />{saved ? 'Сохранено' : 'Сохранить'}
       </button>
     </div>
@@ -145,14 +145,14 @@ function CalendarSheet({ selectedDay, onSelect, onClear, close }: { selectedDay:
   </div>;
 }
 
-function DetailSheet({ event, close, saved, toggleSave }: { event: EventResponse; close: () => void; saved: boolean; toggleSave: () => void }) {
+function DetailSheet({ event, close, saved, toggleSave, saving = false }: { event: EventResponse; close: () => void; saved: boolean; toggleSave: () => void; saving?: boolean }) {
   return <div className="modal-backdrop" onMouseDown={close}>
     <section className="detail-sheet" role="dialog" aria-modal="true" aria-label={event.title} onMouseDown={event => event.stopPropagation()}>
       <div className="grabber" />
       {event.mainImg && <img className="detail-image" src={mediaUrl(event.mainImg)} alt="" />}
       <h2>{event.title}</h2><p className="detail-date">{eventDate(event)}</p><p>{event.location}</p><p className="detail-description">{event.description}</p>
       {event.source && /^https?:\/\//i.test(event.source) && <button className="source-link" onClick={() => openExternal(event.source)}>Источник мероприятия ↗</button>}
-      <button className={`primary-button ${saved ? '' : 'accent'}`} onClick={toggleSave}>{saved ? 'Убрать из сохранённых' : 'Сохранить мероприятие'}</button>
+      <button className={`primary-button ${saved ? '' : 'accent'}`} onClick={toggleSave} disabled={saving}>{saved ? 'Убрать из сохранённых' : 'Сохранить мероприятие'}</button>
     </section>
   </div>;
 }
@@ -174,29 +174,6 @@ function readTagFilterEnabled() {
   catch { return true; }
 }
 
-function profileTagIds(value: unknown): string[] {
-  if (!value || typeof value !== 'object') throw new Error('Не удалось прочитать интересы профиля');
-  const profile = value as Record<string, unknown>;
-  const fields = [profile.interestTagIds, profile.tagIds, profile.interests, profile.tags, profile.interestIds, profile.interestTags, profile.userInterests, profile.preferredTagIds];
-  const list = fields.find(Array.isArray);
-  if (!list) {
-    for (const nested of [profile.user, profile.profile, profile.data]) {
-      try { return profileTagIds(nested); } catch { /* try the next profile field */ }
-    }
-    throw new Error('Не удалось прочитать интересы профиля');
-  }
-  return list.map(item => {
-    if (typeof item === 'string') return item;
-    if (item && typeof item === 'object') {
-      const entry = item as Record<string, unknown>;
-      if (typeof entry.tagId === 'string') return entry.tagId;
-      if (entry.tag && typeof entry.tag === 'object' && typeof (entry.tag as Record<string, unknown>).id === 'string') return (entry.tag as { id: string }).id;
-      if (typeof entry.id === 'string') return entry.id;
-    }
-    return '';
-  }).filter(Boolean);
-}
-
 export default function App() {
   const [page, setPage] = useState<Page>('catalog');
   const [search, setSearch] = useState('');
@@ -210,8 +187,8 @@ export default function App() {
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
   const [detail, setDetail] = useState<EventResponse | null>(null);
-  const [saved, setSaved] = useState<EventResponse[]>(readSaved);
-  const [selectedTags, setSelectedTags] = useState<string[]>(readTagIds);
+  const [saved, setSaved] = useState<EventResponse[]>(() => maxInitData() ? [] : readSaved());
+  const [selectedTags, setSelectedTags] = useState<string[]>(() => maxInitData() ? [] : readTagIds());
   const [tagsEnabled, setTagsEnabled] = useState(readTagFilterEnabled);
   const [tags, setTags] = useState<TagResponse[]>([]);
   const [result, setResult] = useState<PagedEvents | null>(null);
@@ -219,11 +196,23 @@ export default function App() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState('');
   const [reload, setReload] = useState(0);
-  const [authStatus, setAuthStatus] = useState<'pending' | 'ready' | 'anonymous' | 'error'>(() => maxApp() ? 'pending' : 'anonymous');
+  const [authStatus, setAuthStatus] = useState<'pending' | 'ready' | 'anonymous' | 'error'>(() => maxInitData() ? 'pending' : 'anonymous');
   const [authError, setAuthError] = useState('');
   const [authRetry, setAuthRetry] = useState(0);
   const [token, setToken] = useState<string | null>(null);
   const [interestSaving, setInterestSaving] = useState(false);
+  const [savedLoading, setSavedLoading] = useState(false);
+  const [syncError, setSyncError] = useState('');
+  const [actionError, setActionError] = useState('');
+  const [savingIds, setSavingIds] = useState<string[]>([]);
+  const savingRef = useRef(new Set<string>());
+  const savedVersion = useRef(0);
+  const profileVersion = useRef(0);
+  const interestSavingRef = useRef(false);
+  const [profileReload, setProfileReload] = useState(0);
+  const [weeklyDigest, setWeeklyDigest] = useState(false);
+  const [settingsSaving, setSettingsSaving] = useState(false);
+  const settingsSavingRef = useRef(false);
 
   useEffect(() => {
     let mounted = true;
@@ -242,21 +231,23 @@ export default function App() {
     };
   }, []);
 
-  useEffect(() => { try { localStorage.setItem(`${storageNamespace}-saved-v1`, JSON.stringify(saved)); } catch { /* in-memory fallback */ } }, [saved]);
-  useEffect(() => { try { localStorage.setItem(`${storageNamespace}-tags-v1`, JSON.stringify(selectedTags)); } catch { /* in-memory fallback */ } }, [selectedTags]);
+  useEffect(() => { if (authStatus !== 'anonymous') return; try { localStorage.setItem(`${storageNamespace}-saved-v1`, JSON.stringify(saved)); } catch { /* in-memory fallback */ } }, [saved, authStatus]);
+  useEffect(() => { if (authStatus !== 'anonymous') return; try { localStorage.setItem(`${storageNamespace}-tags-v1`, JSON.stringify(selectedTags)); } catch { /* in-memory fallback */ } }, [selectedTags, authStatus]);
   useEffect(() => { try { localStorage.setItem(`${storageNamespace}-tags-enabled-v1`, String(tagsEnabled)); } catch { /* in-memory fallback */ } }, [tagsEnabled]);
   useEffect(() => {
-    const initData = maxApp()?.initData;
+    const initData = maxInitData();
     if (!initData) { setAuthStatus('anonymous'); return; }
     const controller = new AbortController();
-    setAuthStatus('pending'); setAuthError('');
+    setAuthStatus('pending'); setAuthError(''); setToken(null); setSaved([]);
     loginWithMax(initData, controller.signal)
       .then(async session => {
-        const profile = await getMe(session.accessToken, controller.signal);
-        const ids = profileTagIds(profile);
+        const [profile, savedEvents] = await Promise.all([getMe(session.accessToken, controller.signal), getSavedEvents(session.accessToken, controller.signal)]);
+        const ids = profile.tagIds;
         if (controller.signal.aborted) return;
         setToken(session.accessToken);
         setSelectedTags(ids);
+        setSaved(savedEvents);
+        setWeeklyDigest(profile.isWeeklyDigestEnabled);
         setTagsEnabled(true);
         setAuthStatus('ready');
       })
@@ -267,6 +258,33 @@ export default function App() {
       });
     return () => controller.abort();
   }, [authRetry]);
+
+  useEffect(() => {
+    const refresh = () => { if (document.visibilityState === 'visible') setProfileReload(value => value + 1); };
+    window.addEventListener('focus', refresh);
+    document.addEventListener('visibilitychange', refresh);
+    return () => { window.removeEventListener('focus', refresh); document.removeEventListener('visibilitychange', refresh); };
+  }, []);
+
+  useEffect(() => {
+    if (!token || authStatus !== 'ready') return;
+    const controller = new AbortController();
+    const savedSnapshot = savedVersion.current;
+    const profileSnapshot = profileVersion.current;
+    setSavedLoading(true); setSyncError('');
+    Promise.all([getSavedEvents(token, controller.signal), getMe(token, controller.signal)])
+      .then(([items, profile]) => {
+        if (controller.signal.aborted) return;
+        if (savedSnapshot === savedVersion.current && savingRef.current.size === 0) setSaved(items);
+        if (profileSnapshot === profileVersion.current && !interestSavingRef.current && !settingsSavingRef.current) {
+          setSelectedTags(profile.tagIds);
+          setWeeklyDigest(profile.isWeeklyDigestEnabled);
+        }
+      })
+      .catch(err => { if (!controller.signal.aborted) setSyncError(err instanceof Error ? err.message : 'Не удалось синхронизировать профиль'); })
+      .finally(() => { if (!controller.signal.aborted) setSavedLoading(false); });
+    return () => controller.abort();
+  }, [token, authStatus, page, profileReload]);
   useEffect(() => { const timer = window.setTimeout(() => setQuery(search.trim()), 280); return () => clearTimeout(timer); }, [search]);
   useEffect(() => {
     if (page !== 'catalog' || !daysRef.current) return;
@@ -313,7 +331,7 @@ export default function App() {
     request.then(setResult).catch(err => { if (!controller.signal.aborted) setError(err instanceof Error ? err.message : 'Не удалось загрузить мероприятия'); })
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
-  }, [page, query, range.from, range.to, range.allDates, format, selectedTags.join(','), tagsEnabled, reload, authStatus, token]);
+  }, [page, query, range.from, range.to, range.allDates, format, selectedTags.join(','), tagsEnabled, reload, profileReload, authStatus, token]);
 
   const navigate = useCallback((next: Page) => { setDetail(null); setFilterOpen(false); setCalendarOpen(false); if (next === 'catalog') setSearch(''); setPage(next); }, []);
   useEffect(() => {
@@ -333,14 +351,34 @@ export default function App() {
   }, [detail, calendarOpen, filterOpen, page, navigate]);
   useEffect(() => observeMaxBack(Boolean(detail || calendarOpen || filterOpen || page !== 'catalog'), back), [detail, calendarOpen, filterOpen, page, back]);
 
-  function toggleSave(event: EventResponse) {
-    setSaved(current => current.some(item => item.id === event.id) ? current.filter(item => item.id !== event.id) : [...current, event]);
+  async function toggleSave(event: EventResponse) {
+    if (authStatus === 'pending' || authStatus === 'error' || savingRef.current.has(event.id)) return;
+    const removing = saved.some(item => item.id === event.id);
+    if (!token) {
+      setSaved(current => removing ? current.filter(item => item.id !== event.id) : [...current, event]);
+      return;
+    }
+    savingRef.current.add(event.id); savedVersion.current++;
+    setSavingIds([...savingRef.current]); setActionError('');
+    try {
+      if (removing) await removeSavedEvent(event.id, token);
+      else await saveEvent(event.id, token);
+      setSaved(current => removing ? current.filter(item => item.id !== event.id) : current.some(item => item.id === event.id) ? current : [...current, event]);
+      setReload(value => value + 1);
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Не удалось изменить сохранённые');
+    } finally {
+      savingRef.current.delete(event.id); savedVersion.current++;
+      setSavingIds([...savingRef.current]);
+      setProfileReload(value => value + 1);
+    }
   }
 
   async function toggleTag(id: string) {
-    if (interestSaving) return;
+    if (interestSavingRef.current || authStatus === 'pending' || authStatus === 'error') return;
     const next = selectedTags.includes(id) ? selectedTags.filter(item => item !== id) : [...selectedTags, id];
     if (!token) { setSelectedTags(next); setTagsEnabled(true); return; }
+    interestSavingRef.current = true; profileVersion.current++;
     setInterestSaving(true);
     try {
       await saveInterests(next, token);
@@ -349,7 +387,22 @@ export default function App() {
       setAuthError('');
     } catch (err) {
       setAuthError(err instanceof Error ? err.message : 'Не удалось сохранить интересы');
-    } finally { setInterestSaving(false); }
+    } finally { interestSavingRef.current = false; profileVersion.current++; setInterestSaving(false); setProfileReload(value => value + 1); }
+  }
+
+  async function toggleWeeklyDigest() {
+    if (!token || settingsSavingRef.current) return;
+    settingsSavingRef.current = true; profileVersion.current++;
+    setSettingsSaving(true); setActionError('');
+    try {
+      await saveSettings(!weeklyDigest, token);
+      setWeeklyDigest(value => !value);
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Не удалось сохранить настройки');
+    } finally {
+      settingsSavingRef.current = false; profileVersion.current++;
+      setSettingsSaving(false); setProfileReload(value => value + 1);
+    }
   }
 
   function openEvent(event: EventResponse) {
@@ -376,11 +429,12 @@ export default function App() {
   const visibleItems = page === 'catalog' ? [...(result?.items || [])].sort((left, right) => Date.parse(left.eventDateTime) - Date.parse(right.eventDateTime)) : result?.items || [];
   const displayCount = result?.totalCount ?? visibleItems.length;
   const title = page === 'saved' ? 'Сохранённые' : page === 'interests' ? 'Интересы' : page === 'selection' ? 'Подборка' : page === 'search' ? 'Поиск' : 'Все мероприятия';
-  const subtitle = page === 'saved' ? 'События, сохранённые на этом устройстве' : page === 'catalog' ? appliedTags.length ? 'Мероприятия по вашим интересам' : 'Все доступные мероприятия' : page === 'selection' ? 'Три мероприятия для вас' : undefined;
+  const subtitle = page === 'saved' ? token ? 'Общий список с ботом · напоминания включены' : 'События, сохранённые на этом устройстве' : page === 'catalog' ? appliedTags.length ? 'Мероприятия по вашим интересам' : 'Все доступные мероприятия' : page === 'selection' ? 'Три мероприятия для вас' : undefined;
 
   return <div className="app-shell">
     <Header title={title} subtitle={subtitle} onClose={back} back={page === 'search'} />
     <main className="main-content">
+      {(syncError || actionError) && <div className="sync-notice" role="alert"><p>{actionError || syncError}</p><button onClick={() => { setActionError(''); setProfileReload(value => value + 1); setAuthRetry(value => value + 1); }}>Повторить синхронизацию</button></div>}
       {page === 'catalog' && <>
         <div className="search-inset"><SearchField value={search} onChange={setSearch} onFocus={() => navigate('search')} /></div>
         <div className="calendar"><div className="calendar-heading"><b>{new Intl.DateTimeFormat(locale, { month: 'long' }).format(stripStart).toUpperCase()} {stripStart.getFullYear()}</b><button onClick={() => setCalendarOpen(true)}>Выбрать дату</button></div>
@@ -390,19 +444,19 @@ export default function App() {
         <div className="catalog-context"><span>{selectedDay ? `Выбрано: ${new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'long' }).format(new Date(`${selectedDay}T12:00:00`))}` : period === 'all' ? 'Все даты' : period === 'today' ? 'Сегодня' : period === 'week' ? 'Ближайшая неделя' : 'Ближайший месяц'}</span>{selectedDay && <button onClick={() => { setSelectedDay(null); setStripAnchor(todayKey); }}>Сбросить дату</button>}</div>
       </>}
       {page === 'search' && <div className="search-page-top"><SearchField value={search} onChange={setSearch} autoFocus /><div className="result-line"><b>{eventCountText(displayCount)}</b><button onClick={resetFilters}>Сбросить</button></div></div>}
-      {page === 'saved' && <div className="saved-notice"><span>✓</span>Сохранено событий: {saved.length}</div>}
-      {page === 'interests' && <div className="interests-panel"><h2>Ваши интересы</h2><p>{token ? 'Интересы из онбординга бота синхронизированы с вашим профилем. По ним открыт каталог; фильтр можно снять.' : 'Выберите интересы, чтобы фильтровать каталог на этом устройстве.'}</p>{authError && authStatus !== 'error' && <p className="interest-error">{authError}</p>}<div className="chip-row">{tags.map(tag => <button key={tag.id} disabled={interestSaving || authStatus === 'pending'} className={`chip ${selectedTags.includes(tag.id) ? 'selected' : ''}`} onClick={() => toggleTag(tag.id)}>{tag.name}</button>)}</div>{tags.filter(tag => selectedTags.includes(tag.id) && tag.description).map(tag => <p key={tag.id}><b>{tag.name}:</b> {tag.description}</p>)}<button className="primary-button accent" onClick={() => { setTagsEnabled(true); navigate(token ? 'selection' : 'catalog'); }}>{token ? 'Показать подборку' : selectedTags.length ? 'Показать события по интересам' : 'Показать все мероприятия'}</button></div>}
+      {page === 'saved' && authStatus !== 'pending' && authStatus !== 'error' && <div className="saved-notice"><span>✓</span>Сохранено событий: {saved.length}</div>}
+      {page === 'interests' && authStatus !== 'error' && <div className="interests-panel"><h2>Ваши интересы</h2><p>{token ? 'Интересы синхронизированы с ботом и вашим профилем.' : 'Выберите интересы, чтобы фильтровать каталог на этом устройстве.'}</p>{authError && <p className="interest-error">{authError}</p>}<div className="chip-row">{tags.map(tag => <button key={tag.id} disabled={interestSaving || authStatus === 'pending'} className={`chip ${selectedTags.includes(tag.id) ? 'selected' : ''}`} onClick={() => toggleTag(tag.id)}>{tag.name}</button>)}</div>{tags.filter(tag => selectedTags.includes(tag.id) && tag.description).map(tag => <p key={tag.id}><b>{tag.name}:</b> {tag.description}</p>)}<button className="primary-button accent" disabled={authStatus === 'pending' || interestSaving} onClick={() => { setTagsEnabled(true); navigate(token ? 'selection' : 'catalog'); }}>{token ? 'Показать подборку' : selectedTags.length ? 'Показать события по интересам' : 'Показать все мероприятия'}</button>{token && <div className="weekly-settings"><h2>Еженедельная подборка</h2><p>{weeklyDigest ? 'Бот присылает подборку каждое воскресенье.' : 'Рассылка в боте выключена.'}</p><button className="chip" disabled={settingsSaving} onClick={() => void toggleWeeklyDigest()}>{settingsSaving ? 'Сохраняем…' : weeklyDigest ? 'Выключить рассылку' : 'Включить рассылку'}</button></div>}</div>}
       {page === 'selection' && <div className="selection-top"><p>Персональная подборка из трёх мероприятий</p><button className="chip" onClick={() => navigate('interests')}>Мои интересы</button></div>}
-      {page === 'saved' ? <div className="event-list">{saved.length ? saved.map(event => <EventCard key={event.id} event={event} saved onSave={() => toggleSave(event)} onOpen={() => openEvent(event)} savedPage />) : <EmptyState title="Пока нет сохранённых" description="Сохраняйте интересные мероприятия из каталога." actionLabel="Открыть каталог" onReset={() => navigate('catalog')} />}</div>
+      {authStatus === 'error' ? <div className="event-list"><div className="error-state"><h2>Не удалось подключить профиль MAX</h2><p>{authError}</p><button className="small-dark-button" onClick={() => setAuthRetry(value => value + 1)}>Повторить</button></div></div> : page === 'saved' ? <div className="event-list">{authStatus === 'pending' || savedLoading && !saved.length ? <LoadingMore /> : syncError && !saved.length ? <div className="error-state"><h2>Сохранённые недоступны</h2><p>{syncError}</p></div> : saved.length ? saved.map(event => <EventCard key={event.id} event={event} saved onSave={() => void toggleSave(event)} onOpen={() => openEvent(event)} savedPage localOnly={!token} saving={savingIds.includes(event.id)} />) : <EmptyState title="Пока нет сохранённых" description="Сохраняйте интересные мероприятия из каталога или в боте." actionLabel="Открыть каталог" onReset={() => navigate('catalog')} />}</div>
         : page !== 'interests' && <div className={`event-list ${page === 'catalog' ? 'catalog-list' : ''}`}>
-          {authStatus === 'error' ? <div className="error-state"><h2>Не удалось загрузить интересы</h2><p>{authError}</p><button className="small-dark-button" onClick={() => setAuthRetry(value => value + 1)}>Повторить</button></div> : loading && !result ? <LoadingMore /> : error && !result ? <div className="error-state"><h2>{page === 'selection' ? 'Подборка недоступна' : 'Не удалось загрузить мероприятия'}</h2><p>{error}</p><button className="small-dark-button" onClick={() => page === 'selection' && !token ? navigate('catalog') : setReload(value => value + 1)}>{page === 'selection' && !token ? 'Открыть каталог' : 'Повторить'}</button></div> : visibleItems.length ? visibleItems.map((event, index) => <div className="event-group-item" key={event.id}>{page === 'catalog' && (index === 0 || dateOnly(new Date(visibleItems[index - 1].eventDateTime)) !== dateOnly(new Date(event.eventDateTime))) && <h2 className="date-group">{new Intl.DateTimeFormat(locale, { weekday: 'long', day: 'numeric', month: 'long' }).format(new Date(event.eventDateTime)).toUpperCase().replace(',', ' ·')}</h2>}<EventCard event={event} saved={saved.some(item => item.id === event.id)} onSave={() => toggleSave(event)} onOpen={() => openEvent(event)} /></div>) : <EmptyState onReset={() => page === 'selection' ? navigate('interests') : resetFilters()} title={page === 'selection' ? 'Пока нет рекомендаций' : 'Ничего не найдено'} description={page === 'selection' ? 'Добавьте интересы или вернитесь в каталог.' : 'Измените запрос или сбросьте фильтры.'} actionLabel={page === 'selection' ? 'Мои интересы' : 'Сбросить фильтры'} />}
+          {loading && !result ? <LoadingMore /> : error && !result ? <div className="error-state"><h2>{page === 'selection' ? 'Подборка недоступна' : 'Не удалось загрузить мероприятия'}</h2><p>{error}</p><button className="small-dark-button" onClick={() => page === 'selection' && !token ? navigate('catalog') : setReload(value => value + 1)}>{page === 'selection' && !token ? 'Открыть каталог' : 'Повторить'}</button></div> : visibleItems.length ? visibleItems.map((event, index) => <div className="event-group-item" key={event.id}>{page === 'catalog' && (index === 0 || dateOnly(new Date(visibleItems[index - 1].eventDateTime)) !== dateOnly(new Date(event.eventDateTime))) && <h2 className="date-group">{new Intl.DateTimeFormat(locale, { weekday: 'long', day: 'numeric', month: 'long' }).format(new Date(event.eventDateTime)).toUpperCase().replace(',', ' ·')}</h2>}<EventCard event={event} saved={saved.some(item => item.id === event.id)} onSave={() => void toggleSave(event)} onOpen={() => openEvent(event)} saving={authStatus === 'pending' || savingIds.includes(event.id)} /></div>) : <EmptyState onReset={() => page === 'selection' ? navigate(saved.length ? 'saved' : 'interests') : resetFilters()} title={page === 'selection' ? 'Новых мероприятий пока нет' : 'Ничего не найдено'} description={page === 'selection' ? saved.length ? 'Посмотрите события, которые вы уже сохранили в боте или приложении.' : 'Добавьте интересы или вернитесь в каталог.' : 'Измените запрос или сбросьте фильтры.'} actionLabel={page === 'selection' ? saved.length ? 'Сохранённые' : 'Мои интересы' : 'Сбросить фильтры'} />}
           {result?.hasNextPage && <button className="more-button" onClick={loadMore} disabled={loadingMore}>{loadingMore ? <LoadingMore /> : 'Показать ещё'}</button>}
         </div>}
     </main>
     <BottomNav page={page} onNavigate={navigate} />
     {calendarOpen && <CalendarSheet selectedDay={selectedDay} onSelect={day => { setPeriod('all'); setSelectedDay(day); setStripAnchor(day); setCalendarOpen(false); }} onClear={() => { setPeriod('all'); setSelectedDay(null); setStripAnchor(todayKey); setCalendarOpen(false); }} close={() => setCalendarOpen(false)} />}
     {filterOpen && <FilterSheet period={period} selectedDay={selectedDay} format={format} setPeriod={value => { setSelectedDay(null); setStripAnchor(todayKey); setPeriod(value); }} setFormat={setFormat} chooseDate={() => { setFilterOpen(false); setCalendarOpen(true); }} tags={tags} selectedTags={selectedTags} tagsEnabled={tagsEnabled} toggleTag={toggleTag} setTagsEnabled={setTagsEnabled} reset={resetFilters} apply={() => setFilterOpen(false)} count={displayCount} close={() => setFilterOpen(false)} />}
-    {detail && <DetailSheet event={detail} saved={saved.some(item => item.id === detail.id)} toggleSave={() => toggleSave(detail)} close={() => setDetail(null)} />}
+    {detail && <DetailSheet event={detail} saved={saved.some(item => item.id === detail.id)} toggleSave={() => void toggleSave(detail)} saving={authStatus === 'pending' || authStatus === 'error' || savingIds.includes(detail.id)} close={() => setDetail(null)} />}
     <span className="sr-only">{maxApp() ? 'Открыто в MAX' : 'Открыто в браузере'}</span>
   </div>;
 }

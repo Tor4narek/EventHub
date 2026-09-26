@@ -19,7 +19,11 @@ declare global {
 
 export function maxApp() {
   const app = window.WebApp;
-  return app?.initData ? app : undefined;
+  return maxInitData() ? app : undefined;
+}
+
+export function maxInitData() {
+  return window.WebApp?.initData || new URLSearchParams(window.location.hash.slice(1)).get('WebAppData') || '';
 }
 
 export function openExternal(url: string) {

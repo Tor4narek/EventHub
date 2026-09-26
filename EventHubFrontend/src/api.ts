@@ -38,7 +38,7 @@ export interface EventFilters {
   tags?: string[];
 }
 
-const baseUrl = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
+const baseUrl = (import.meta.env?.VITE_API_BASE_URL || '').replace(/\/$/, '');
 
 async function requestJson<T>(path: string, signal?: AbortSignal, options?: { method?: string; body?: unknown; token?: string }): Promise<T> {
   const request = new AbortController();
@@ -57,7 +57,11 @@ async function requestJson<T>(path: string, signal?: AbortSignal, options?: { me
         ...(options?.token ? { Authorization: `Bearer ${options.token}` } : {}),
       },
     });
-    if (!response.ok) throw new Error(`API вернул ${response.status}`);
+    if (!response.ok) {
+      if (response.status === 401) throw new Error('Не удалось подтвердить сессию MAX. Повторите подключение профиля или откройте приложение заново из бота.');
+      const problem = await response.json().catch(() => null) as { detail?: string } | null;
+      throw new Error(problem?.detail || `API вернул ${response.status}`);
+    }
     if (response.status === 204) return undefined as T;
     const body = await response.text();
     return body ? JSON.parse(body) as T : undefined as T;
@@ -75,13 +79,30 @@ function getJson<T>(path: string, signal?: AbortSignal) {
 }
 
 export interface TokenResponse { accessToken: string; expiresAt: string }
+export interface UserProfile { id: string; maxUserId: number; isWeeklyDigestEnabled: boolean; tagIds: string[] }
 
 export function loginWithMax(initData: string, signal?: AbortSignal) {
   return requestJson<TokenResponse>('/api/auth/max', signal, { method: 'POST', body: { initData } });
 }
 
 export function getMe(token: string, signal?: AbortSignal) {
-  return requestJson<unknown>('/api/me', signal, { token });
+  return requestJson<UserProfile>('/api/me', signal, { token });
+}
+
+export function getSavedEvents(token: string, signal?: AbortSignal) {
+  return requestJson<EventResponse[]>('/api/me/saved-events', signal, { token });
+}
+
+export function saveEvent(id: string, token: string, signal?: AbortSignal) {
+  return requestJson<void>(`/api/me/saved-events/${encodeURIComponent(id)}`, signal, { method: 'POST', token });
+}
+
+export function removeSavedEvent(id: string, token: string, signal?: AbortSignal) {
+  return requestJson<void>(`/api/me/saved-events/${encodeURIComponent(id)}`, signal, { method: 'DELETE', token });
+}
+
+export function saveSettings(isWeeklyDigestEnabled: boolean, token: string, signal?: AbortSignal) {
+  return requestJson<void>('/api/me/settings', signal, { method: 'PATCH', body: { isWeeklyDigestEnabled }, token });
 }
 
 export function saveInterests(tagIds: string[], token: string, signal?: AbortSignal) {

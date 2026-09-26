@@ -11,6 +11,7 @@
 .back-arrow{display:block;width:22px;height:22px;color:#fff}
 
 /* Motion is brief and tied to feedback: selecting, opening, saving and loading. */
+.sync-notice{margin:14px 20px;padding:14px;border-radius:14px;background:#fff2f9;color:#ac0d64;font-size:13px;line-height:1.4}.sync-notice button{margin-top:8px;padding:0;background:transparent;color:#634fff;font-weight:600}.weekly-settings{display:flex;flex-direction:column;align-items:flex-start;gap:10px;padding-top:18px;border-top:1px solid #cfd7d9}.weekly-settings h2{font-size:18px}.save-button:disabled,.primary-button:disabled,.chip:disabled{opacity:.55;cursor:wait}
 @keyframes rise-in{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
 @keyframes sheet-in{from{opacity:.7;transform:translateY(24px)}to{opacity:1;transform:translateY(0)}}
 @keyframes backdrop-in{from{background:rgba(235,244,246,0)}to{background:rgba(235,244,246,.68)}}
