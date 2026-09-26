@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using Services.Dto;
 using Services.Interfaces;
 using Storage;
@@ -71,13 +71,11 @@ public class EventService : IEventService
 		ArgumentNullException.ThrowIfNull(tags);
 
 		var tagIds = tags.ToHashSet();
-		var moscowTimeZone = TimeZoneInfo.FindSystemTimeZoneById("Europe/Moscow");
-		var moscowToday = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, moscowTimeZone).Date;
-		var startOfTodayUtc = TimeZoneInfo.ConvertTimeToUtc(moscowToday, moscowTimeZone);
+		var now = DateTime.UtcNow;
 
 		var query = _dbContext.Events
 			.AsNoTracking()
-			.Where(e => e.EventStatus == EventStatus.Published && e.EventDateTime >= startOfTodayUtc);
+			.Where(e => e.EventStatus == EventStatus.Published && e.EventDateTime > now);
 
 		if (tagIds.Count > 0)
 		{
@@ -122,8 +120,9 @@ public class EventService : IEventService
 			throw new ArgumentOutOfRangeException(nameof(filter));
 		}
 
+		var now = DateTime.UtcNow;
 		var moscowTimeZone = TimeZoneInfo.FindSystemTimeZoneById("Europe/Moscow");
-		var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, moscowTimeZone));
+		var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(now, moscowTimeZone));
 		var from = publishedOnly && (filter.From is null || filter.From < today) ? today : filter.From;
 		var to = publishedOnly && !filter.AllDates
 			? filter.To ?? (from ?? today).AddMonths(1).AddDays(-1)
@@ -136,7 +135,7 @@ public class EventService : IEventService
 		var query = _dbContext.Events.AsNoTracking().AsQueryable();
 		if (publishedOnly)
 		{
-			query = query.Where(e => e.EventStatus == EventStatus.Published);
+			query = query.Where(e => e.EventStatus == EventStatus.Published && e.EventDateTime > now);
 		}
 		else if (filter.Status is not null)
 		{

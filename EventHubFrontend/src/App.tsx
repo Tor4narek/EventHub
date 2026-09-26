@@ -293,7 +293,20 @@ export default function App() {
     return () => controller.abort();
   }, []);
 
-  const referenceDate = new Date();
+  const [now, setNow] = useState(Date.now);
+  useEffect(() => {
+    const tick = () => setNow(Date.now());
+    const timer = window.setInterval(tick, 30000);
+    window.addEventListener('focus', tick);
+    document.addEventListener('visibilitychange', tick);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener('focus', tick);
+      document.removeEventListener('visibilitychange', tick);
+    };
+  }, []);
+  const referenceDate = new Date(now);
+  const referenceDay = dateOnly(referenceDate);
   const activeDay = selectedDay;
   const appliedTags = tagsEnabled ? selectedTags : [];
   const range = useMemo(() => {
@@ -304,7 +317,7 @@ export default function App() {
     if (period === 'week') end.setDate(end.getDate() + 6);
     if (period === 'month') end.setMonth(end.getMonth() + 1);
     return { from: dateOnly(start), to: dateOnly(end) };
-  }, [period, selectedDay, page]);
+  }, [period, selectedDay, page, referenceDay]);
 
   useEffect(() => {
     if (page === 'saved' || page === 'interests') return;
@@ -412,8 +425,9 @@ export default function App() {
     const date = new Date(stripStart.getFullYear(), stripStart.getMonth(), stripStart.getDate() + index);
     return { key: dateOnly(date), day: date.getDate(), weekday: new Intl.DateTimeFormat(locale, { weekday: 'short' }).format(date).replace('.', '') };
   });
-  const visibleItems = page === 'catalog' ? [...(result?.items || [])].sort((left, right) => Date.parse(left.eventDateTime) - Date.parse(right.eventDateTime)) : result?.items || [];
-  const displayCount = result?.totalCount ?? visibleItems.length;
+  const upcomingItems = (result?.items || []).filter(event => Date.parse(event.eventDateTime) > now);
+  const visibleItems = page === 'catalog' ? [...upcomingItems].sort((left, right) => Date.parse(left.eventDateTime) - Date.parse(right.eventDateTime)) : upcomingItems;
+  const displayCount = Math.max(0, (result?.totalCount ?? 0) - ((result?.items.length ?? 0) - visibleItems.length));
   const title = page === 'saved' ? 'Сохранённые' : page === 'interests' ? 'Интересы' : page === 'selection' ? 'Подборка' : page === 'search' ? 'Поиск' : 'Все мероприятия';
   const subtitle = page === 'saved' ? token ? 'Общий список с ботом · напоминания включены' : 'События, сохранённые на этом устройстве' : page === 'catalog' ? appliedTags.length ? 'Мероприятия по вашим интересам' : 'Все доступные мероприятия' : page === 'selection' ? 'Три мероприятия для вас' : undefined;
 
