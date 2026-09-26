@@ -40,3 +40,16 @@ html,body,#root{height:100%;overflow:hidden}
 .detail-description{white-space:pre-wrap;overflow-wrap:anywhere}
 .detail-link{font-size:12px;font-weight:600;color:#634fff}
 .search-field input,.tag-search,.calendar-sheet-actions input{font-size:16px}
+
+/* Native inertial scrolling and individual snap points give dates a picker-wheel feel. */
+.date-slider-window{position:relative}
+.date-slider-window::after{content:"";position:absolute;top:5px;left:50%;width:52px;height:52px;transform:translateX(-50%);border:1px solid #cfd7d9;border-radius:12px;pointer-events:none}
+.date-slider{display:flex;gap:8px;overflow-x:auto;overflow-y:hidden;padding:7px calc(50% - 26px);scroll-snap-type:x mandatory;overscroll-behavior-x:contain;scrollbar-width:none;-webkit-overflow-scrolling:touch;mask-image:linear-gradient(to right,transparent,#000 14%,#000 86%,transparent);-webkit-mask-image:linear-gradient(to right,transparent,#000 14%,#000 86%,transparent)}
+.date-slider::-webkit-scrollbar{display:none}
+.date-slider .day{flex:0 0 52px;width:52px;height:48px;min-width:52px;scroll-snap-align:center;background:transparent;opacity:.55;transform:scale(.9);transition:transform .16s ease,opacity .16s ease,background-color .2s ease}
+.date-slider .day.centered{opacity:1;transform:scale(1)}
+.date-slider .day.active{background:#0e0e11;color:#fff}
+.date-slider .day.active span{color:#b0ff4a}
+.date-slider:focus-visible{outline:2px solid #634fff;outline-offset:2px;border-radius:12px}
+.date-slider-hint{text-align:center;margin-top:4px;font-size:10px;color:#757d7d}
+@media(prefers-reduced-motion:reduce){.date-slider .day{transition:none}}
