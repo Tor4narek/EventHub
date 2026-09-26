@@ -182,7 +182,7 @@ public sealed class BotScenario : IBotScenario
 		if (events.Count == 0)
 		{
 			var hasSaved = (await _savedEvents.GetSavedEventsAsync(userId, cancellationToken)).Any(item => item.EventDateTime > now);
-			await SendAsync(maxUserId, "Новых мероприятий на ближайшие семь дней пока нет. " +
+			await SendAsync(maxUserId, "Новых мероприятий с открытой регистрацией на ближайшие 7 дней пока нет. " +
 				(hasSaved ? "Посмотри сохранённые события или открой каталог." : "Открой каталог всех мероприятий или измени интересы."),
 				[BotMessageFactory.NextActions(_options.WebAppName, hasSaved)], cancellationToken);
 			return;
