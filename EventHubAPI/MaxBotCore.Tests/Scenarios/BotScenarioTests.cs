@@ -15,6 +15,25 @@ namespace MaxBotCore.Tests.Scenarios;
 public sealed class BotScenarioTests
 {
 	[Fact]
+	public async Task All_events_uses_current_bot_miniapp_without_configured_name()
+	{
+		var fixture = new Fixture();
+		IReadOnlyList<MaxAttachment>? sent = null;
+		fixture.Max.Setup(x => x.SendMessageToUserAsync(42, "Главное меню",
+			It.IsAny<IReadOnlyList<MaxAttachment>?>(), null, true, It.IsAny<CancellationToken>()))
+			.Callback<long, string?, IReadOnlyList<MaxAttachment>?, MaxBotCore.Contracts.Common.TextFormat?, bool, CancellationToken>((_, _, attachments, _, _, _) => sent = attachments)
+			.ReturnsAsync(new MaxMessage());
+		await fixture.Scenario.HandleAsync(new BotCommand(42, BotCommandType.AllEvents), CancellationToken.None);
+		var keyboard = Assert.IsType<InlineKeyboardAttachment>(Assert.Single(sent!));
+		var button = Assert.IsType<OpenAppButton>(Assert.Single(keyboard.Payload.Buttons[1]));
+		Assert.Equal(777L, button.ContactId);
+		var json = System.Text.Json.JsonSerializer.Serialize<MaxButton>(button);
+		Assert.Contains("\"type\":\"open_app\"", json);
+		Assert.Contains("\"contact_id\":777", json);
+		Assert.DoesNotContain("web_app", json);
+	}
+
+	[Fact]
 	public async Task Start_without_tags_shows_onboarding()
 	{
 		var fixture = new Fixture();
@@ -125,6 +144,8 @@ public sealed class BotScenarioTests
 
 		public Fixture()
 		{
+			Max.Setup(x => x.GetMeAsync(It.IsAny<CancellationToken>()))
+				.ReturnsAsync(new MaxBotCore.Contracts.Common.MaxUser { UserId = 777, IsBot = true });
 			Users.Setup(x => x.CreateByMaxUserIdAsync(42, It.IsAny<CancellationToken>())).ReturnsAsync(User);
 			Max.Setup(x => x.SendMessageToUserAsync(It.IsAny<long>(), It.IsAny<string?>(),
 				It.IsAny<IReadOnlyList<MaxAttachment>?>(), null, true, It.IsAny<CancellationToken>()))
