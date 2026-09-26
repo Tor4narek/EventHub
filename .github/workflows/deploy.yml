@@ -33,6 +33,7 @@ jobs:
           MAX__APIBASEURL: ${{ secrets.MAX__APIBASEURL }}
           MAX__BOTTOKEN: ${{ secrets.MAX__BOTTOKEN }}
           MAX__WEBHOOKSECRET: ${{ secrets.MAX__WEBHOOKSECRET }}
+          MAX__WEBAPPNAME: ${{ secrets.MAX__WEBAPPNAME }}
           MINIO_API_PORT: ${{ secrets.MINIO_API_PORT }}
           MINIO_CONSOLE_PORT: ${{ secrets.MINIO_CONSOLE_PORT }}
           MINIO_ROOT_PASSWORD: ${{ secrets.MINIO_ROOT_PASSWORD }}
