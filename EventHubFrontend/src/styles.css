@@ -40,6 +40,3 @@ html,body,#root{height:100%;overflow:hidden}
 .detail-description{white-space:pre-wrap;overflow-wrap:anywhere}
 .detail-link{font-size:12px;font-weight:600;color:#634fff}
 .search-field input,.tag-search,.calendar-sheet-actions input{font-size:16px}
-
-.days{touch-action:pan-y pinch-zoom;user-select:none;-webkit-user-select:none}
-.days:focus-visible{outline:2px solid #634fff;outline-offset:4px;border-radius:11px}
