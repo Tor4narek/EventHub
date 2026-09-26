@@ -1,38 +1,95 @@
-import type { ButtonHTMLAttributes, HTMLAttributes, InputHTMLAttributes, TextareaHTMLAttributes } from 'react'
+import { Children, cloneElement, createContext, useContext, isValidElement, useEffect, useId, useRef, useState, type ReactNode, type ReactElement, type ButtonHTMLAttributes, type HTMLAttributes, type InputHTMLAttributes, type TextareaHTMLAttributes, type SelectHTMLAttributes } from 'react'
+import { AlertCircle, ArrowLeft, ArrowRight, CheckCircle2, ChevronDown, Inbox, X, type LucideIcon } from 'lucide-react'
 
 const cx = (...parts: Array<string | undefined | false>) => parts.filter(Boolean).join(' ')
-
-type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
-  variant?: 'primary' | 'secondary' | 'destructive' | 'ghost'
-  size?: 'small' | 'medium'
-  stretched?: boolean
-  loading?: boolean
+export function Icon({ icon: Glyph, size = 20, className }: { icon: LucideIcon; size?: number; className?: string }) {
+  return <Glyph size={size} strokeWidth={1.8} aria-hidden="true" className={cx('ui-icon', className)} />
 }
-
-export function Button({ variant = 'secondary', size = 'medium', stretched, loading, disabled, className, children, ...props }: ButtonProps) {
-  const variants = {
-    primary: 'border-ink bg-ink text-white hover:border-[#323237] hover:bg-[#323237]',
-    secondary: 'border-line bg-white text-ink hover:bg-soft',
-    destructive: 'border-pink/25 bg-white text-pink hover:bg-pink/5',
-    ghost: 'border-transparent bg-transparent text-muted hover:bg-soft',
-  }
-  return <button className={cx('inline-flex cursor-pointer items-center justify-center gap-2 rounded-xl border font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:cursor-not-allowed disabled:opacity-50', size === 'small' ? 'min-h-8 px-3 text-xs' : 'min-h-11 px-4 text-sm', variants[variant], stretched && 'w-full', className)} disabled={disabled || loading} {...props}>
-    {loading && <Spinner size={14} />}<span>{children}</span>
+type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & { variant?: 'primary' | 'secondary' | 'destructive' | 'ghost'; size?: 'small' | 'medium'; stretched?: boolean; loading?: boolean; icon?: LucideIcon }
+export function Button({ variant = 'secondary', size = 'medium', stretched, loading, disabled, className, children, icon, type = 'button', ...props }: ButtonProps) {
+  return <button type={type} className={cx('ui-button', `ui-button--${variant}`, `ui-button--${size}`, stretched && 'ui-button--stretched', className)} disabled={disabled || loading} aria-busy={loading || undefined} {...props}>
+    {icon && <span className="button-icon">{loading ? <Spinner size={16} /> : <Icon icon={icon} size={16} />}</span>}
+    <span className={cx('button-label', loading && !icon && 'button-label--loading')}>{children}</span>
+    {loading && !icon && <span className="button-spinner"><Spinner size={16} /></span>}
   </button>
 }
-
-export function Input({ className, ...props }: InputHTMLAttributes<HTMLInputElement>) {
-  return <input className={cx('min-h-11 w-full min-w-0 rounded-xl border border-line bg-soft px-3 text-sm text-ink outline-none placeholder:text-muted focus:border-accent focus:ring-2 focus:ring-accent/10 disabled:opacity-60', className)} {...props} />
+export function IconButton({ icon, label, ...props }: Omit<ButtonProps, 'children'> & { icon: LucideIcon; label: string }) {
+  return <Button {...props} className={cx('icon-button', props.className)} aria-label={label} title={label} icon={icon} />
 }
-
-export function Textarea({ className, ...props }: TextareaHTMLAttributes<HTMLTextAreaElement>) {
-  return <textarea className={cx('w-full min-w-0 resize-y rounded-xl border border-line bg-soft px-3 py-2.5 text-sm text-ink outline-none placeholder:text-muted focus:border-accent focus:ring-2 focus:ring-accent/10 disabled:opacity-60', className)} {...props} />
+export function Input({ className, ...props }: InputHTMLAttributes<HTMLInputElement>) { return <input className={cx('ui-input', className)} {...props} /> }
+export function Textarea({ className, ...props }: TextareaHTMLAttributes<HTMLTextAreaElement>) { return <textarea className={cx('ui-input ui-textarea', className)} {...props} /> }
+export function Select({ className, ...props }: SelectHTMLAttributes<HTMLSelectElement>) { return <span className="ui-select"><select className={cx('ui-input', className)} {...props} /><Icon icon={ChevronDown} size={16} /></span> }
+export function FormField({ label, hint, error, children }: { label: string; hint?: string; error?: string; children: ReactNode }) {
+  const id = useId()
+  const control = Children.only(children) as ReactElement<InputHTMLAttributes<HTMLInputElement>>
+  return <div className="form-field"><label htmlFor={id}>{label}{control.props.required && <span className="required"> *</span>}</label>
+    {isValidElement(control) && cloneElement(control, { id, 'aria-invalid': Boolean(error), 'aria-describedby': error || hint ? `${id}-help` : undefined })}
+    {(error || hint) && <p id={`${id}-help`} className={error ? 'field-error' : 'hint'}>{error || hint}</p>}
+  </div>
 }
-
-export function Panel({ mode: _mode, className, ...props }: HTMLAttributes<HTMLDivElement> & { mode?: 'primary' | 'secondary' }) {
-  return <div className={cx('rounded-2xl border border-line bg-white', className)} {...props} />
+export function Panel({ mode: _mode, className, ...props }: HTMLAttributes<HTMLDivElement> & { mode?: 'primary' | 'secondary' }) { return <div className={cx('ui-panel', className)} {...props} /> }
+export function Spinner({ size = 20 }: { size?: number }) { return <span role="progressbar" aria-label="Загрузка" className="ui-spinner" style={{ width: size, height: size }} /> }
+export function Badge({ tone = 'draft', children }: { tone?: 'draft' | 'live' | 'confirmed' | 'pending'; children: ReactNode }) { return <span className={`badge ${tone}`}>{children}</span> }
+export function Chip({ active, children, ...props }: ButtonHTMLAttributes<HTMLButtonElement> & { active?: boolean }) { return <button type="button" {...props} className="filter-chip" aria-pressed={Boolean(active)}>{children}</button> }
+export function Alert({ text, onClose, success = false, onRetry }: { text: string; onClose?: () => void; success?: boolean; onRetry?: () => void }) {
+  return <div className={`alert ${success ? 'success' : 'notice'}`} role={success ? 'status' : 'alert'}><Icon icon={success ? CheckCircle2 : AlertCircle} size={18} /><span>{text}</span>{onRetry && <Button size="small" onClick={onRetry}>Повторить</Button>}{onClose && <IconButton icon={X} label="Закрыть уведомление" variant="ghost" size="small" onClick={onClose} />}</div>
 }
+export function LoadingState({ compact = false }: { compact?: boolean }) { return <div className={`loading ${compact ? 'loading--compact' : ''}`} role="status"><Spinner size={compact ? 16 : 24} /><span>{compact ? 'Обновляем список…' : 'Загружаем данные…'}</span></div> }
+export function EmptyState({ title, text, icon = Inbox, children }: { title: string; text: string; icon?: LucideIcon; children?: ReactNode }) { return <Panel className="empty"><div className="empty-icon"><Icon icon={icon} size={28} /></div><h3>{title}</h3><p>{text}</p>{children}</Panel> }
+export function Pagination({ page, totalPages, hasNext, disabled, onChange }: { page: number; totalPages: number; hasNext: boolean; disabled?: boolean; onChange: (page: number) => void }) { return <nav className="pagination" aria-label="Страницы списка"><Button icon={ArrowLeft} disabled={disabled || page <= 1} onClick={() => onChange(page - 1)}>Назад</Button><span>Страница {page} из {totalPages}</span><Button icon={ArrowRight} disabled={disabled || !hasNext} onClick={() => onChange(page + 1)}>Вперёд</Button></nav> }
 
-export function Spinner({ size = 20 }: { size?: number }) {
-  return <span role="progressbar" aria-label="Загрузка" className="inline-block animate-spin rounded-full border-2 border-current border-r-transparent" style={{ width: size, height: size }} />
+// A stack keeps Escape and focus inside the topmost dialog, including discard confirmation.
+const dialogStack: HTMLElement[] = []
+let bodyOverflow = ''
+const CloseContext = createContext<() => void>(() => {})
+export function ModalCancel({ disabled }: { disabled?: boolean }) { const close = useContext(CloseContext); return <Button disabled={disabled} onClick={close}>Отмена</Button> }
+export function Modal({ children, label, onClose, drawer = false, dirty = false, busy = false }: { children: ReactNode; label: string; onClose: () => void; drawer?: boolean; dirty?: boolean; busy?: boolean }) {
+  const ref = useRef<HTMLDivElement>(null)
+  const [discard, setDiscard] = useState(false)
+  const closeRef = useRef(() => {})
+  closeRef.current = () => { if (!busy) { if (dirty) setDiscard(true); else onClose() } }
+  useEffect(() => {
+    const element = ref.current!
+    const previous = document.activeElement as HTMLElement | null
+    if (!dialogStack.length) bodyOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    const underlying = dialogStack.at(-1)
+    if (underlying) { underlying.inert = true; underlying.setAttribute('aria-hidden', 'true') }
+    dialogStack.push(element)
+    const initialFocus = element.querySelector<HTMLElement>('input, textarea, select') || element.querySelector<HTMLElement>('.dialog-actions button, button')
+    initialFocus?.focus()
+    function keydown(e: KeyboardEvent) {
+      if (dialogStack.at(-1) !== element) return
+      if (e.key === 'Escape') { e.preventDefault(); closeRef.current() }
+      if (e.key === 'Tab') {
+        const nodes = Array.from(element.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), textarea:not(:disabled), select:not(:disabled), a[href], [tabindex="0"]')).filter(node => node.getClientRects().length)
+        const first = nodes[0], last = nodes.at(-1)
+        if (!first) { e.preventDefault(); element.focus() }
+        else if (e.shiftKey && (document.activeElement === first || document.activeElement === element)) { e.preventDefault(); last?.focus() }
+        else if (!e.shiftKey && (document.activeElement === last || !element.contains(document.activeElement))) { e.preventDefault(); first.focus() }
+      }
+    }
+    function focusin(e: FocusEvent) { if (dialogStack.at(-1) === element && !element.contains(e.target as Node)) element.focus() }
+    document.addEventListener('keydown', keydown)
+    document.addEventListener('focusin', focusin)
+    return () => {
+      dialogStack.splice(dialogStack.indexOf(element), 1)
+      const active = dialogStack.at(-1)
+      if (active) { active.inert = false; active.removeAttribute('aria-hidden') }
+      else document.body.style.overflow = bodyOverflow
+      document.removeEventListener('keydown', keydown)
+      document.removeEventListener('focusin', focusin)
+      if (previous?.isConnected) previous.focus()
+    }
+  }, [])
+  useEffect(() => {
+    if (!dirty) return
+    function unload(e: BeforeUnloadEvent) { e.preventDefault(); e.returnValue = '' }
+    window.addEventListener('beforeunload', unload)
+    return () => window.removeEventListener('beforeunload', unload)
+  }, [dirty])
+  return <><div className={`overlay ${drawer ? 'overlay--drawer' : ''}`} onMouseDown={e => { if (e.target === e.currentTarget) closeRef.current() }}><div ref={ref} tabIndex={-1} className={drawer ? 'drawer' : 'dialog ui-panel'} role="dialog" aria-modal="true" aria-label={label} aria-busy={busy || undefined}>
+    <IconButton className="modal-close" icon={X} label="Закрыть" variant="ghost" disabled={busy} onClick={() => closeRef.current()} /><CloseContext.Provider value={() => closeRef.current()}>{children}</CloseContext.Provider>
+  </div></div>{discard && <ConfirmDialog title="Закрыть без сохранения?" text="Изменения в форме будут потеряны." confirmLabel="Не сохранять" destructive onClose={() => setDiscard(false)} onConfirm={onClose} />}</>
 }
+export function ConfirmDialog({ title, text, confirmLabel, onConfirm, onClose, busy, destructive = false }: { title: string; text: string; confirmLabel: string; onConfirm: () => void; onClose: () => void; busy?: boolean; destructive?: boolean }) { return <Modal label={title} onClose={onClose} busy={busy}><h2>{title}</h2><p className="muted">{text}</p><div className="dialog-actions"><Button disabled={busy} onClick={onClose}>Отмена</Button><Button variant={destructive ? 'destructive' : 'primary'} loading={busy} onClick={onConfirm}>{confirmLabel}</Button></div></Modal> }
