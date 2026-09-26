@@ -178,8 +178,8 @@ function EventList({ tags, reviewOnly, refreshTags }: { tags: Tag[]; reviewOnly:
       </div>
       <div className="filter-grid">
         <div className="filter-tags"><span>Теги</span><details><summary>{filters.tags.length ? `Выбрано: ${filters.tags.length}` : 'Все теги'}<Icon icon={ChevronDown} size={16} /></summary><div className="filter-tags-options"><TagSelector tags={tags} selected={filters.tags} onChange={ids => updateFilters({ tags: ids })} /></div></details></div>
-        <label>Проверка тегов<Select value={filters.tagsConfirmed} onChange={e => updateFilters({ tagsConfirmed: e.target.value })}><option value="">Все</option><option value="false">Ожидают проверки</option><option value="true">Проверены</option></Select></label>
-        <label>Формат<Select value={filters.format} onChange={e => updateFilters({ format: e.target.value })}><option value="">Любой</option><option value="online">Онлайн</option><option value="offline">Офлайн</option></Select></label>
+        <div className="filter-field"><span>Проверка тегов</span><Select label="Проверка тегов" value={filters.tagsConfirmed} onValueChange={value => updateFilters({ tagsConfirmed: value })}><option value="">Все</option><option value="false">Ожидают проверки</option><option value="true">Проверены</option></Select></div>
+        <div className="filter-field"><span>Формат</span><Select label="Формат" value={filters.format} onValueChange={value => updateFilters({ format: value })}><option value="">Любой</option><option value="online">Онлайн</option><option value="offline">Офлайн</option></Select></div>
         <label>С даты<Input type="date" value={filters.from} onChange={e => updateFilters({ from: e.target.value })} /></label>
         <label>По дату<Input type="date" value={filters.to} onChange={e => updateFilters({ to: e.target.value })} /></label>
       </div>

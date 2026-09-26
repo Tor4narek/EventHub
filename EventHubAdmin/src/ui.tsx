@@ -1,5 +1,5 @@
-import { Children, cloneElement, createContext, useContext, isValidElement, useEffect, useId, useRef, useState, type ReactNode, type ReactElement, type ButtonHTMLAttributes, type HTMLAttributes, type InputHTMLAttributes, type TextareaHTMLAttributes, type SelectHTMLAttributes } from 'react'
-import { AlertCircle, ArrowLeft, ArrowRight, CheckCircle2, ChevronDown, Inbox, X, type LucideIcon } from 'lucide-react'
+import { Children, cloneElement, createContext, useContext, isValidElement, useEffect, useId, useRef, useState, type ReactNode, type ReactElement, type ButtonHTMLAttributes, type HTMLAttributes, type InputHTMLAttributes, type TextareaHTMLAttributes, type OptionHTMLAttributes } from 'react'
+import { AlertCircle, ArrowLeft, ArrowRight, CheckCircle2, Check, ChevronDown, Inbox, X, type LucideIcon } from 'lucide-react'
 
 const cx = (...parts: Array<string | undefined | false>) => parts.filter(Boolean).join(' ')
 export function Icon({ icon: Glyph, size = 20, className }: { icon: LucideIcon; size?: number; className?: string }) {
@@ -18,7 +18,34 @@ export function IconButton({ icon, label, ...props }: Omit<ButtonProps, 'childre
 }
 export function Input({ className, ...props }: InputHTMLAttributes<HTMLInputElement>) { return <input className={cx('ui-input', className)} {...props} /> }
 export function Textarea({ className, ...props }: TextareaHTMLAttributes<HTMLTextAreaElement>) { return <textarea className={cx('ui-input ui-textarea', className)} {...props} /> }
-export function Select({ className, ...props }: SelectHTMLAttributes<HTMLSelectElement>) { return <span className="ui-select"><select className={cx('ui-input', className)} {...props} /><Icon icon={ChevronDown} size={16} /></span> }
+export function Select({ value, onValueChange, children, label }: { value: string; onValueChange: (value: string) => void; children: ReactNode; label: string }) {
+  const id = useId()
+  const ref = useRef<HTMLDivElement>(null)
+  const trigger = useRef<HTMLButtonElement>(null)
+  const [open, setOpen] = useState(false)
+  const [active, setActive] = useState(0)
+  const options = Children.toArray(children).filter(isValidElement).map(child => (child as ReactElement<OptionHTMLAttributes<HTMLOptionElement>>).props)
+  const selected = Math.max(0, options.findIndex(option => String(option.value ?? '') === value))
+  useEffect(() => {
+    if (!open) return
+    function outside(e: PointerEvent) { if (!ref.current?.contains(e.target as Node)) setOpen(false) }
+    document.addEventListener('pointerdown', outside)
+    return () => document.removeEventListener('pointerdown', outside)
+  }, [open])
+  function choose(index: number) { onValueChange(String(options[index].value ?? '')); setOpen(false); trigger.current?.focus() }
+  return <div ref={ref} className="ui-select">
+    <button ref={trigger} type="button" role="combobox" aria-label={label} aria-haspopup="listbox" aria-expanded={open} aria-controls={`${id}-options`} aria-activedescendant={open ? `${id}-${active}` : undefined} className="ui-input select-trigger" onClick={() => { setActive(selected); setOpen(old => !old) }} onKeyDown={e => {
+      if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key)) {
+        e.preventDefault()
+        if (!open) { setActive(selected); setOpen(true) }
+        else setActive(old => e.key === 'Home' ? 0 : e.key === 'End' ? options.length - 1 : Math.max(0, Math.min(options.length - 1, old + (e.key === 'ArrowDown' ? 1 : -1))))
+      } else if (open && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); choose(active) }
+      else if (e.key === 'Escape' && open) { e.preventDefault(); e.stopPropagation(); setOpen(false) }
+      else if (e.key === 'Tab') setOpen(false)
+    }}><span>{options[selected]?.children}</span><Icon icon={ChevronDown} size={16} className={open ? 'select-chevron open' : 'select-chevron'} /></button>
+    {open && <div id={`${id}-options`} className="ui-select-options" role="listbox" aria-label={label}>{options.map((option, index) => <div key={String(option.value)} id={`${id}-${index}`} role="option" aria-selected={index === selected} className={`select-option ${index === active ? 'is-active' : ''}`} onPointerMove={() => setActive(index)} onMouseDown={e => e.preventDefault()} onClick={() => choose(index)}><span>{option.children}</span>{index === selected && <Icon icon={Check} size={16} />}</div>)}</div>}
+  </div>
+}
 export function FormField({ label, hint, error, children }: { label: string; hint?: string; error?: string; children: ReactNode }) {
   const id = useId()
   const control = Children.only(children) as ReactElement<InputHTMLAttributes<HTMLInputElement>>
