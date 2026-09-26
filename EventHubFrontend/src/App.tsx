@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent } from 'react';
 import { getEvent, getEvents, getMe, getRecommendations, getSavedEvents, getTags, loginWithMax, mediaUrl, removeSavedEvent, saveEvent, saveInterests, saveSettings, type EventResponse, type PagedEvents, type TagResponse } from './api';
 import { maxApp, maxInitData, observeMaxBack, observeMaxViewport, openExternal } from './maxBridge';
 
@@ -185,6 +185,8 @@ export default function App() {
   const [stripAnchor, setStripAnchor] = useState(() => dateOnly(new Date()));
   const [visibleDayCount, setVisibleDayCount] = useState(6);
   const daysRef = useRef<HTMLDivElement>(null);
+  const dateGesture = useRef<{ id: number; x: number; y: number; dragged: boolean } | null>(null);
+  const suppressDateClick = useRef(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
   const [detail, setDetail] = useState<EventResponse | null>(null);
@@ -420,7 +422,42 @@ export default function App() {
   }
 
   const todayKey = dateOnly(referenceDate);
-  const stripStart = new Date(`${stripAnchor}T12:00:00`);
+  const stripStart = new Date(`${stripAnchor < todayKey ? todayKey : stripAnchor}T12:00:00`);
+  function shiftDates(direction: number) {
+    setStripAnchor(current => {
+      const start = new Date(`${current < todayKey ? todayKey : current}T12:00:00`);
+      start.setDate(start.getDate() + direction * visibleDayCount);
+      const next = dateOnly(start);
+      return next < todayKey ? todayKey : next;
+    });
+  }
+  function startDateSwipe(event: PointerEvent<HTMLDivElement>) {
+    if (!event.isPrimary || event.button !== 0) return;
+    suppressDateClick.current = false;
+    dateGesture.current = { id: event.pointerId, x: event.clientX, y: event.clientY, dragged: false };
+  }
+  function moveDateSwipe(event: PointerEvent<HTMLDivElement>) {
+    const gesture = dateGesture.current;
+    if (!gesture || gesture.id !== event.pointerId) return;
+    const dx = event.clientX - gesture.x;
+    const dy = event.clientY - gesture.y;
+    if (Math.abs(dx) > 12 && Math.abs(dx) > Math.abs(dy) * 1.3) {
+      gesture.dragged = true;
+      suppressDateClick.current = true;
+      event.currentTarget.setPointerCapture(event.pointerId);
+    }
+  }
+  function finishDateSwipe(event: PointerEvent<HTMLDivElement>) {
+    const gesture = dateGesture.current;
+    if (!gesture || gesture.id !== event.pointerId) return;
+    dateGesture.current = null;
+    const dx = event.clientX - gesture.x;
+    const dy = event.clientY - gesture.y;
+    if (gesture.dragged && Math.abs(dx) >= 40 && Math.abs(dx) > Math.abs(dy) * 1.3) {
+      shiftDates(dx < 0 ? 1 : -1);
+    }
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+  }
   const dayItems = Array.from({ length: visibleDayCount }, (_, index) => {
     const date = new Date(stripStart.getFullYear(), stripStart.getMonth(), stripStart.getDate() + index);
     return { key: dateOnly(date), day: date.getDate(), weekday: new Intl.DateTimeFormat(locale, { weekday: 'short' }).format(date).replace('.', '') };
@@ -438,7 +475,12 @@ export default function App() {
       {page === 'catalog' && <>
         <div className="search-inset"><SearchField value={search} onChange={setSearch} onFocus={() => navigate('search')} /></div>
         <div className="calendar"><div className="calendar-heading"><b>{new Intl.DateTimeFormat(locale, { month: 'long' }).format(stripStart).toUpperCase()} {stripStart.getFullYear()}</b><button onClick={() => setCalendarOpen(true)}>Выбрать дату</button></div>
-          <div className="days" ref={daysRef} style={{ gridTemplateColumns: `repeat(${visibleDayCount}, minmax(0, 1fr))` }}>{dayItems.map(day => <button key={day.key} className={activeDay === day.key ? 'day active' : 'day'} onClick={() => { setPeriod('all'); if (selectedDay === day.key) { setSelectedDay(null); setStripAnchor(todayKey); } else setSelectedDay(day.key); }}><b>{day.day}</b><span>{day.weekday}</span></button>)}</div>
+          <div className="days" ref={daysRef} role="group" tabIndex={0} aria-label="Даты мероприятий. Свайпайте или используйте стрелки для перехода к следующим дням."
+            onPointerDown={startDateSwipe} onPointerMove={moveDateSwipe} onPointerUp={finishDateSwipe}
+            onPointerCancel={() => { dateGesture.current = null; suppressDateClick.current = false; }}
+            onClickCapture={event => { if (suppressDateClick.current && event.detail !== 0) { event.preventDefault(); event.stopPropagation(); } suppressDateClick.current = false; }}
+            onKeyDown={event => { suppressDateClick.current = false; if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') { event.preventDefault(); shiftDates(event.key === 'ArrowRight' ? 1 : -1); event.currentTarget.focus(); } }}
+            style={{ gridTemplateColumns: `repeat(${visibleDayCount}, minmax(0, 1fr))` }}>{dayItems.map(day => <button key={day.key} className={activeDay === day.key ? 'day active' : 'day'} aria-pressed={activeDay === day.key} aria-label={new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(`${day.key}T12:00:00`))} onClick={() => { setPeriod('all'); if (selectedDay === day.key) { setSelectedDay(null); setStripAnchor(todayKey); } else setSelectedDay(day.key); }}><b>{day.day}</b><span>{day.weekday}</span></button>)}</div>
         </div>
         <div className="quick-filters"><button className={`chip ${period === 'all' && format === 'all' && !appliedTags.length && !selectedDay ? 'selected' : ''}`} onClick={resetFilters}>Все</button><button className="chip" onClick={() => setFilterOpen(true)}>Формат</button><button className="chip" onClick={() => setFilterOpen(true)}>Даты</button><button className="chip" onClick={() => setFilterOpen(true)}>Теги</button>{selectedTags.length > 0 && <button className={`chip ${tagsEnabled ? 'selected' : ''}`} onClick={() => setTagsEnabled(enabled => !enabled)}>По интересам · {selectedTags.length} {tagsEnabled ? '×' : '+'}</button>}</div>
         <div className="catalog-context"><span>{selectedDay ? `Выбрано: ${new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'long' }).format(new Date(`${selectedDay}T12:00:00`))}` : period === 'all' ? 'Все даты' : period === 'today' ? 'Сегодня' : period === 'week' ? 'Ближайшая неделя' : 'Ближайший месяц'}</span>{selectedDay && <button onClick={() => { setSelectedDay(null); setStripAnchor(todayKey); }}>Сбросить дату</button>}</div>
