@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { Alert, Badge, Button, Chip, ConfirmDialog, EmptyState, FormField, Icon, IconButton, Input, LoadingState, Modal, ModalCancel, Pagination, Panel, Select, Textarea } from './ui'
-import { ArrowRight, CalendarDays, Check, ChevronDown, Clock3, Download, ExternalLink, ListChecks, MapPin, Plus, Search, Tags, Trash2 } from 'lucide-react'
+import { CalendarDays, ChevronDown, Clock3, ExternalLink, ListChecks, MapPin, Plus, Search, Tags, Trash2 } from 'lucide-react'
 import { api, session, setUnauthorizedHandler, type EventFilters, type EventItem, type EventPayload, type Page, type Tag, type TagPayload } from './api'
 import { displayDate, fromMoscowInput, toMoscowInput } from './time'
+import { TagSelector } from './TagSelector'
+import { ImportsPage } from './ImportsPage'
 import { AppShell } from './AppShell'
 import { routeFor, sectionFromPath, type Section } from './Sidebar'
 
@@ -19,14 +21,6 @@ const imageSrc = (value: string) => {
 
 const Notice = Alert
 const Loading = LoadingState
-
-function TagSelector({ tags, selected, onChange }: { tags: Tag[]; selected: string[]; onChange: (ids: string[]) => void }) {
-  return <div className="tag-selector">
-    {tags.length ? tags.map(tag => <label className={`tag-choice ${selected.includes(tag.id) ? 'selected' : ''}`} key={tag.id}>
-      <input type="checkbox" checked={selected.includes(tag.id)} onChange={e => onChange(e.target.checked ? [...selected, tag.id] : selected.filter(id => id !== tag.id))} /><Icon icon={Check} size={14} className="tag-check" />{tag.name}
-    </label>) : <span className="muted">Тегов пока нет. Создайте их в разделе «Теги».</span>}
-  </div>
-}
 
 function Login({ onLogin }: { onLogin: () => void }) {
   const [username, setUsername] = useState('')
@@ -248,8 +242,6 @@ function TagsPage({ tags, loading, error, reload }: { tags: Tag[]; loading: bool
   return <><div className="page-head"><div><h1>Теги</h1><p className="muted">Темы, по которым EventHub подбирает и группирует мероприятия.</p></div><Button icon={Plus} variant="primary" onClick={() => setEditing('new')}>Новый тег</Button></div>{message && <Alert text={message} success onClose={() => setMessage('')} />}{(error || actionError) && <Notice text={error || actionError} onRetry={error ? reload : undefined} onClose={error ? undefined : () => setActionError('')} />}{loading && tags.length > 0 && <Loading compact />}{loading && !tags.length ? <Loading /> : tags.length ? <div className="tag-grid">{tags.map(tag => <Panel mode="secondary" className="tag-card" key={tag.id}><div className="tag-card-icon"><Icon icon={Tags} /></div><h3>{tag.name}</h3><p>{tag.description}</p><div className="tag-count">{tag.examples.length} {tag.examples.length % 10 === 1 && tag.examples.length % 100 !== 11 ? 'пример' : [2, 3, 4].includes(tag.examples.length % 10) && ![12, 13, 14].includes(tag.examples.length % 100) ? 'примера' : 'примеров'}</div><div className="tag-actions"><Button size="small" variant="secondary" disabled={Boolean(busyId) || loading} onClick={() => setEditing(tag)}>Редактировать</Button><Button size="small" variant="destructive" disabled={Boolean(busyId) || loading} onClick={() => setRemoving(tag)}>Удалить</Button></div></Panel>)}</div> : !error && <EmptyState icon={Tags} title="Тегов пока нет" text="Создайте первый тег для классификации мероприятий." />}{removing && <ConfirmDialog title="Удалить тег?" text={`«${removing.name}» будет удалён из списка тегов. Это действие нельзя отменить.`} confirmLabel="Удалить тег" destructive busy={Boolean(busyId)} onClose={() => setRemoving(null)} onConfirm={() => void remove(removing)} />}{editing && <TagEditor key={editing === 'new' ? 'new' : editing.id} tag={editing === 'new' ? null : editing} onClose={() => setEditing(null)} onSaved={text => { setEditing(null); setMessage(text); reload() }} />}</>
 }
 
-function ImportsPage() { return <><div className="page-head"><div><h1>Импорт</h1><p className="muted">Мероприятия из внешних источников появятся здесь после подключения импортёра.</p></div></div><Panel mode="secondary" className="import-panel"><div className="import-visual"><Icon icon={Download} size={36} /></div><Badge>Скоро</Badge><h2>Импортёр ещё не подключён</h2><p>После подключения импортёра события с неподтверждёнными тегами будут попадать в очередь проверки.</p><div className="import-flow"><span>Внешний источник</span><Icon icon={ArrowRight} size={16} /><span>Импорт</span><Icon icon={ArrowRight} size={16} /><span>Проверка тегов</span><Icon icon={ArrowRight} size={16} /><span>Публикация</span></div></Panel></> }
-
 export default function App() {
   const [loggedIn, setLoggedIn] = useState(Boolean(session.token))
   const [section, setSection] = useState<Section>(sectionFromPath)
@@ -275,7 +267,7 @@ export default function App() {
     {section === 'events' && <EventList key="events" tags={tags} reviewOnly={false} refreshTags={reloadTags} />}
     {section === 'review' && <EventList key="review" tags={tags} reviewOnly refreshTags={reloadTags} />}
     {section === 'tags' && <TagsPage tags={tags} loading={tagsLoading} error={tagsError} reload={reloadTags} />}
-    {section === 'imports' && <ImportsPage />}
+    {section === 'imports' && <ImportsPage tags={tags} />}
   </AppShell>
 }
 

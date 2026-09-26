@@ -23,6 +23,7 @@
       <ProjectReference Include="..\ImageStorage\ImageStorage.csproj" />
         <ProjectReference Include="..\MaxBotCore\MaxBotCore.csproj" />
         <ProjectReference Include="..\Scheduler\Scheduler.csproj" />
+        <ProjectReference Include="..\EventImport\EventImport.csproj" />
     </ItemGroup>
 
     <ItemGroup>

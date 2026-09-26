@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using Storage.Entities;
 
 namespace Storage;
@@ -12,6 +12,8 @@ public class AppDbContext : DbContext
 	public DbSet<EventTag> EventTags => Set<EventTag>();
 	public DbSet<UserEvent> UserEvents => Set<UserEvent>();
 	public DbSet<BotUpdate> BotUpdates => Set<BotUpdate>();
+	public DbSet<EventImportRun> EventImportRuns => Set<EventImportRun>();
+	public DbSet<EventImportItem> EventImportItems => Set<EventImportItem>();
 
 
 	public AppDbContext(DbContextOptions<AppDbContext> options)
@@ -30,6 +32,7 @@ public class AppDbContext : DbContext
 		ConfigureEventTag(modelBuilder);
 		ConfigureUserEvent(modelBuilder);
 		ConfigureBotUpdate(modelBuilder);
+		ConfigureEventImport(modelBuilder);
 	}
 
 	private static void ConfigureUser(ModelBuilder modelBuilder)
@@ -173,4 +176,29 @@ public class AppDbContext : DbContext
 			entity.HasIndex(e => new { e.ProcessedAt, e.NextAttemptAt, e.LeaseUntil });
 		});
 	}
+	private static void ConfigureEventImport(ModelBuilder modelBuilder)
+	{
+		modelBuilder.Entity<EventImportRun>(entity =>
+		{
+			entity.HasKey(e => e.Id);
+			entity.HasMany(e => e.Items).WithOne().HasForeignKey(e => e.ImportRunId);
+		});
+		modelBuilder.Entity<EventImportItem>(entity =>
+		{
+			entity.HasKey(e => e.Id);
+			entity.Property(e => e.SourceKey).HasMaxLength(100).IsRequired();
+			entity.Property(e => e.Source).HasMaxLength(2048).IsRequired();
+			entity.Property(e => e.Title).HasMaxLength(300);
+			entity.Property(e => e.Location).HasMaxLength(300);
+			entity.Property(e => e.MainImg).HasMaxLength(2048);
+			entity.Property(e => e.Status).HasConversion<string>().HasMaxLength(20);
+			entity.Property(e => e.LeaseToken).IsConcurrencyToken();
+			entity.HasIndex(e => new { e.Status, e.LeaseUntil });
+			entity.HasIndex(e => e.SourceKey).IsUnique()
+				.HasFilter("\"Status\" = 'Confirmed'")
+				.HasDatabaseName("IX_EventImportItems_ConfirmedSourceKey");
+			entity.HasOne<Event>().WithMany().HasForeignKey(e => e.EventId).OnDelete(DeleteBehavior.Restrict);
+		});
+	}
+
 }

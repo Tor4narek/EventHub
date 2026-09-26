@@ -1,4 +1,4 @@
-﻿FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS base
+FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS base
 USER root
 COPY ["certs/russian_trusted_root_ca.crt", "/usr/local/share/ca-certificates/"]
 RUN update-ca-certificates
@@ -10,6 +10,7 @@ ARG BUILD_CONFIGURATION=Release
 WORKDIR /src
 COPY ["EventHubAPI/EventHubAPI.csproj", "EventHubAPI/"]
 COPY ["Services/Services.csproj", "Services/"]
+COPY ["EventImport/EventImport.csproj", "EventImport/"]
 COPY ["Storage/Storage.csproj", "Storage/"]
 COPY ["ImageStorage/ImageStorage.csproj", "ImageStorage/"]
 COPY ["MaxBotCore/MaxBotCore.csproj", "MaxBotCore/"]

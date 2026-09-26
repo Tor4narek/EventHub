@@ -14,6 +14,16 @@ export interface EventItem {
   createdAt: string
   updatedAt: string
 }
+export type ImportStatus = 'Pending' | 'Processing' | 'Ready' | 'Failed' | 'Confirmed' | 'Duplicate'
+export interface ImportItem {
+  id: string; importRunId: string; source: string; status: ImportStatus;
+  title: string | null; description: string | null; originalDescription: string | null;
+  eventDateTime: string | null; deadline: string | null; location: string | null; mainImg: string | null;
+  tagIds: string[]; suggestedTagIds: string[]; suggestedDescription: string | null;
+  warnings: string[]; error: string | null; eventId: string | null;
+}
+export interface ImportRun { id: string; createdAt: string; items: ImportItem[] }
+export type ImportEdit = Pick<ImportItem, 'title' | 'description' | 'eventDateTime' | 'deadline' | 'location' | 'mainImg' | 'tagIds'>
 export type EventPayload = Pick<EventItem, 'title' | 'description' | 'eventDateTime' | 'location' | 'source' | 'deadline' | 'tagIds' | 'mainImg'>
 export interface Tag { id: string; name: string; description: string; examples: string[] }
 export type TagPayload = Omit<Tag, 'id'>
@@ -98,6 +108,13 @@ export const api = {
   createTag: (body: TagPayload) => request<Tag>('/api/admin/tags', { method: 'POST', body: json(body) }),
   updateTag: (id: string, body: TagPayload) => request<Tag>(`/api/admin/tags/${idPath(id)}`, { method: 'PUT', body: json(body) }),
   deleteTag: (id: string) => request<void>(`/api/admin/tags/${idPath(id)}`, { method: 'DELETE' }),
+  imports: () => request<ImportRun[]>('/api/admin/imports'),
+  startImport: (urls: string[]) => request<{ importId: string }>('/api/admin/imports', { method: 'POST', body: json({ urls }) }),
+  importRun: (id: string) => request<ImportRun>(`/api/admin/imports/${idPath(id)}`),
+  importItem: (id: string, itemId: string) => request<ImportItem>(`/api/admin/imports/${idPath(id)}/items/${idPath(itemId)}`),
+  updateImportItem: (id: string, itemId: string, body: ImportEdit) => request<ImportItem>(`/api/admin/imports/${idPath(id)}/items/${idPath(itemId)}`, { method: 'PUT', body: json(body) }),
+  confirmImportItem: (id: string, itemId: string) => request<{ eventId: string }>(`/api/admin/imports/${idPath(id)}/items/${idPath(itemId)}/confirm`, { method: 'POST' }),
+  retryImportItem: (id: string, itemId: string) => request<void>(`/api/admin/imports/${idPath(id)}/items/${idPath(itemId)}/retry`, { method: 'POST' }),
   uploadImage: (file: File) => {
     const body = new FormData()
     body.append('file', file)
