@@ -53,4 +53,7 @@ public interface IMaxBotClient
 
     /// <summary>Подтвердить нажатие inline-кнопки. POST /answers.</summary>
     Task AnswerCallbackAsync(string callbackId, CancellationToken cancellationToken = default);
+
+    Task EditMessageAsync(string messageId, string text, IReadOnlyList<MaxAttachment> attachments,
+        CancellationToken cancellationToken = default);
 }

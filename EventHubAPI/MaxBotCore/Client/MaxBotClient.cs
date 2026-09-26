@@ -94,6 +94,19 @@ public sealed class MaxBotClient : IMaxBotClient
 		}
 	}
 
+	public async Task EditMessageAsync(string messageId, string text, IReadOnlyList<MaxAttachment> attachments,
+		CancellationToken cancellationToken = default)
+	{
+		ArgumentException.ThrowIfNullOrWhiteSpace(messageId);
+		using var response = await _httpClient.PutAsJsonAsync(
+			$"messages?message_id={Uri.EscapeDataString(messageId)}",
+			new SendMessageRequest { Text = text, Attachments = attachments, Notify = false }, _jsonOptions, cancellationToken);
+		await EnsureSuccessAsync(response, "PUT /messages", cancellationToken);
+		using var payload = await response.Content.ReadFromJsonAsync<JsonDocument>(cancellationToken);
+		if (payload?.RootElement.TryGetProperty("success", out var success) != true || success.ValueKind != JsonValueKind.True)
+			throw new HttpRequestException("MAX не подтвердил обновление сообщения.");
+	}
+
 	private async Task<MaxMessage> SendMessageAsync(
 		string relativeUrl,
 		string? text,

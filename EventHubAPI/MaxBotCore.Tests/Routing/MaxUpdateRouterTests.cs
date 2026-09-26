@@ -17,6 +17,26 @@ namespace MaxBotCore.Tests.Routing;
 public sealed class MaxUpdateRouterTests
 {
 	[Fact]
+	public async Task Callback_handler_passes_source_message_id_after_acknowledgement()
+	{
+		var client = new Mock<MaxBotCore.Client.IMaxBotClient>();
+		var scenario = new Mock<MaxBotCore.Scenarios.IBotScenario>();
+		var sequence = new MockSequence();
+		client.InSequence(sequence).Setup(x => x.AnswerCallbackAsync("callback-1", It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+		scenario.InSequence(sequence).Setup(x => x.HandleAsync(
+			It.Is<MaxBotCore.Scenarios.BotCommand>(command => command.MessageId == "card-1" && command.MaxUserId == 42 && command.Type == MaxBotCore.Scenarios.BotCommandType.Settings),
+			It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+		var handler = new MaxBotCore.Handlers.MessageCallbackHandler(scenario.Object, client.Object, NullLogger<MaxBotCore.Handlers.MessageCallbackHandler>.Instance);
+		await handler.HandleAsync(new MessageCallbackUpdate
+		{
+			Callback = new MaxCallback { CallbackId = "callback-1", User = new MaxUser { UserId = 42 }, Payload = "menu:settings" },
+			Message = new MaxMessage { Body = new MaxMessageBody { Mid = "card-1" } }
+		}, CancellationToken.None);
+		client.VerifyAll();
+		scenario.VerifyAll();
+	}
+
+	[Fact]
 	public async Task Router_dispatches_MessageCreated_to_correct_handler()
 	{
 		var handlerMock = new Mock<IMaxUpdateHandler<MessageCreatedUpdate>>();

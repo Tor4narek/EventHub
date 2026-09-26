@@ -18,7 +18,8 @@ public static class BotMessageFactory
 			[allEvents],
 			[new CallbackButton { Text = "Сохранённые", Payload = "menu:saved" }],
 			[new CallbackButton { Text = "Мои интересы", Payload = "menu:interests" }],
-			[new CallbackButton { Text = "Настройки", Payload = "menu:settings" }]);
+			[new CallbackButton { Text = "Настройки", Payload = "menu:settings" }],
+			[new CallbackButton { Text = "Помощь", Payload = "menu:help" }]);
 	}
 
 	public static InlineKeyboardAttachment Interests(IReadOnlyList<Tag> tags, IReadOnlyCollection<Guid> selected, bool onboarding)
@@ -32,7 +33,7 @@ public static class BotMessageFactory
 			}]).ToList();
 		rows.Add([new CallbackButton
 		{
-			Text = onboarding ? "Готово" : "В меню",
+			Text = onboarding ? $"Готово · выбрано {selected.Count}" : "Готово · в меню",
 			Payload = onboarding ? "onboarding:done" : "menu:home"
 		}]);
 		return new InlineKeyboardAttachment { Payload = new InlineKeyboardPayload { Buttons = rows } };
@@ -44,13 +45,18 @@ public static class BotMessageFactory
 		var deadline = item.Deadline is { } value
 			? TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(value, DateTimeKind.Utc), Moscow).ToString("dd.MM.yyyy HH:mm") + " МСК"
 			: "не указан";
-		var text = $"{item.Title}\n\n{Shorten(item.Description, 500)}\n\n{date:dd.MM.yyyy HH:mm} МСК\n{item.Location}\nДедлайн регистрации: {deadline}\nИсточник: {item.Source}";
+		var registrationClosed = item.Deadline is { } registrationDeadline && registrationDeadline <= DateTime.UtcNow;
+		var past = item.EventDateTime <= DateTime.UtcNow;
+		var text = $"{item.Title}\n{date:dd.MM.yyyy HH:mm} МСК · {item.Location}\n\n{Shorten(item.Description, 280)}\n\n" +
+			(past ? "Мероприятие уже началось или завершилось." : registrationClosed ? "Срок регистрации закончился." :
+				item.Deadline.HasValue ? $"Регистрация до: {deadline}" : "Дедлайн регистрации не указан.") +
+			(saved ? "\n✓ Сохранено" : "");
 		var buttons = new List<MaxButton>();
 		if (Uri.TryCreate(item.Source, UriKind.Absolute, out var source) && source.Scheme == Uri.UriSchemeHttps)
-			buttons.Add(new LinkButton { Text = "Зарегистрироваться", Url = item.Source });
-		buttons.Add(new CallbackButton
+			buttons.Add(new LinkButton { Text = past || registrationClosed ? "Сайт организатора ↗" : "Зарегистрироваться ↗", Url = item.Source });
+		if (saved || !past) buttons.Add(new CallbackButton
 		{
-			Text = saved ? "Убрать из сохранённых" : "🔔 Напомнить",
+			Text = saved ? "Убрать из сохранённых" : "🔔 Сохранить и напомнить",
 			Payload = $"{(saved ? "unsave" : "remind")}:{item.Id}"
 		});
 		var attachments = new List<MaxAttachment>();
@@ -69,6 +75,34 @@ public static class BotMessageFactory
 
 	public static InlineKeyboardAttachment SavedEvents() => Keyboard(
 		[new CallbackButton { Text = "Сохранённые", Payload = "menu:saved" }]);
+
+	public static InlineKeyboardAttachment Home() => Keyboard(
+		[new CallbackButton { Text = "Главное меню", Payload = "menu:home" }]);
+
+	public static InlineKeyboardAttachment NextActions(string? webAppName, bool saved = false, bool hasPast = false)
+	{
+		var rows = new List<IReadOnlyList<MaxButton>>();
+		if (saved) rows.Add([new CallbackButton { Text = "Сохранённые", Payload = "menu:saved" }]);
+		if (hasPast) rows.Add([new CallbackButton { Text = "Прошедшие сохранённые", Payload = "saved:past" }]);
+		rows.Add([new CallbackButton { Text = "Подобрать мероприятия", Payload = "menu:find" }]);
+		if (!string.IsNullOrWhiteSpace(webAppName))
+			rows.Add([new OpenAppButton { Text = "Все мероприятия ↗", WebApp = webAppName }]);
+		rows.Add([new CallbackButton { Text = "Мои интересы", Payload = "menu:interests" }]);
+		rows.Add([new CallbackButton { Text = "Главное меню", Payload = "menu:home" }]);
+		return new InlineKeyboardAttachment { Payload = new InlineKeyboardPayload { Buttons = rows } };
+	}
+
+	public static InlineKeyboardAttachment SavedNavigation(int offset, int count, bool past, bool hasPast)
+	{
+		var rows = new List<IReadOnlyList<MaxButton>>();
+		var prefix = past ? "saved:past:" : "saved:";
+		if (offset > 0) rows.Add([new CallbackButton { Text = "Назад", Payload = prefix + Math.Max(0, offset - 5) }]);
+		if (count > offset + 5) rows.Add([new CallbackButton { Text = "Показать ещё", Payload = prefix + (offset + 5) }]);
+		if (past) rows.Add([new CallbackButton { Text = "Предстоящие", Payload = "menu:saved" }]);
+		else if (hasPast) rows.Add([new CallbackButton { Text = "Прошедшие", Payload = "saved:past" }]);
+		rows.Add([new CallbackButton { Text = "Главное меню", Payload = "menu:home" }]);
+		return new InlineKeyboardAttachment { Payload = new InlineKeyboardPayload { Buttons = rows } };
+	}
 
 	private static InlineKeyboardAttachment Keyboard(params IReadOnlyList<MaxButton>[] rows) =>
 		new() { Payload = new InlineKeyboardPayload { Buttons = rows } };

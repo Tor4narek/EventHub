@@ -41,6 +41,9 @@ public sealed class MessageCallbackHandler : IMaxUpdateHandler<MessageCallbackUp
 		}
 		if (update.Callback.User is not { IsBot: false, UserId: > 0 } user)
 			return;
-		await _scenario.HandleAsync(BotCommandParser.ParseCallback(user.UserId, update.Callback.Payload), cancellationToken);
+		await _scenario.HandleAsync(BotCommandParser.ParseCallback(user.UserId, update.Callback.Payload) with
+		{
+			MessageId = update.Message?.Body?.Mid
+		}, cancellationToken);
 	}
 }

@@ -4,6 +4,8 @@ public enum BotCommandType
 {
 	Unknown,
 	Start,
+	Menu,
+	Help,
 	FindEvents,
 	AllEvents,
 	SavedEvents,
@@ -17,7 +19,7 @@ public enum BotCommandType
 }
 
 public sealed record BotCommand(long MaxUserId, BotCommandType Type, Guid? EntityId = null,
-	bool? Enabled = null, bool IsOnboarding = false, int Offset = 0);
+	bool? Enabled = null, bool IsOnboarding = false, int Offset = 0, string? MessageId = null, bool Past = false);
 
 public static class BotCommandParser
 {
@@ -31,10 +33,15 @@ public static class BotCommandParser
 			"menu:saved" => new(maxUserId, BotCommandType.SavedEvents),
 			"menu:interests" => new(maxUserId, BotCommandType.Interests),
 			"menu:settings" => new(maxUserId, BotCommandType.Settings),
-			"menu:home" => new(maxUserId, BotCommandType.Start),
+			"menu:home" => new(maxUserId, BotCommandType.Menu),
+			"menu:help" => new(maxUserId, BotCommandType.Help),
+			"saved:past" => new(maxUserId, BotCommandType.SavedEvents, Past: true),
 			"onboarding:done" => new(maxUserId, BotCommandType.FinishOnboarding),
 			"digest:on" => new(maxUserId, BotCommandType.SetWeeklyDigest, Enabled: true),
 			"digest:off" => new(maxUserId, BotCommandType.SetWeeklyDigest, Enabled: false),
+			_ when payload.StartsWith("saved:past:", StringComparison.Ordinal) &&
+				int.TryParse(payload[11..], out var pastOffset) && pastOffset >= 0 && pastOffset <= 10000
+				=> new(maxUserId, BotCommandType.SavedEvents, Offset: pastOffset, Past: true),
 			_ when payload.StartsWith("saved:", StringComparison.Ordinal) &&
 				int.TryParse(payload[6..], out var offset) && offset >= 0 && offset <= 10000
 				=> new(maxUserId, BotCommandType.SavedEvents, Offset: offset),
@@ -45,11 +52,13 @@ public static class BotCommandParser
 	public static BotCommand ParseText(long maxUserId, string? text) => text?.Trim().ToLowerInvariant() switch
 	{
 		"/start" => new(maxUserId, BotCommandType.Start),
-		"подобрать мероприятия" => new(maxUserId, BotCommandType.FindEvents),
-		"все мероприятия" => new(maxUserId, BotCommandType.AllEvents),
-		"сохранённые" or "сохраненные" => new(maxUserId, BotCommandType.SavedEvents),
-		"мои интересы" => new(maxUserId, BotCommandType.Interests),
-		"настройки" => new(maxUserId, BotCommandType.Settings),
+		"/menu" or "меню" => new(maxUserId, BotCommandType.Menu),
+		"/help" or "помощь" => new(maxUserId, BotCommandType.Help),
+		"/find" or "подобрать мероприятия" => new(maxUserId, BotCommandType.FindEvents),
+		"/events" or "все мероприятия" => new(maxUserId, BotCommandType.AllEvents),
+		"/saved" or "сохранённые" or "сохраненные" => new(maxUserId, BotCommandType.SavedEvents),
+		"/interests" or "мои интересы" => new(maxUserId, BotCommandType.Interests),
+		"/settings" or "настройки" => new(maxUserId, BotCommandType.Settings),
 		_ => new(maxUserId, BotCommandType.Unknown)
 	};
 

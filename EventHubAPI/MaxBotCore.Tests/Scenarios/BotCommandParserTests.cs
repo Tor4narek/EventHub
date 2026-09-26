@@ -7,6 +7,35 @@ namespace MaxBotCore.Tests.Scenarios;
 
 public sealed class BotCommandParserTests
 {
+	[Theory]
+	[InlineData("/menu", BotCommandType.Menu)]
+	[InlineData("/help", BotCommandType.Help)]
+	[InlineData("/saved", BotCommandType.SavedEvents)]
+	[InlineData("/settings", BotCommandType.Settings)]
+	[InlineData("/interests", BotCommandType.Interests)]
+	public void Parses_quick_commands(string text, BotCommandType type) =>
+		Assert.Equal(type, BotCommandParser.ParseText(42, text).Type);
+
+	[Fact]
+	public void Home_does_not_restart_welcome() =>
+		Assert.Equal(BotCommandType.Menu, BotCommandParser.ParseCallback(42, "menu:home").Type);
+
+	[Fact]
+	public void Parses_past_saved_page()
+	{
+		var command = BotCommandParser.ParseCallback(42, "saved:past:5");
+		Assert.True(command.Past);
+		Assert.Equal(5, command.Offset);
+	}
+
+	[Fact]
+	public void Closed_registration_links_to_organizer_without_promising_registration()
+	{
+		var card = BotMessageFactory.EventCard(new Event { EventDateTime = DateTime.UtcNow.AddDays(2), Deadline = DateTime.UtcNow.AddDays(-1), Source = "https://example.com" });
+		Assert.Contains("Срок регистрации закончился", card.Text);
+		var keyboard = Assert.IsType<MaxBotCore.Contracts.Attachments.InlineKeyboardAttachment>(Assert.Single(card.Attachments));
+		Assert.StartsWith("Сайт организатора", Assert.IsType<LinkButton>(keyboard.Payload.Buttons[0][0]).Text);
+	}
 	[Fact]
 	public void Parses_reminder_with_event_id()
 	{

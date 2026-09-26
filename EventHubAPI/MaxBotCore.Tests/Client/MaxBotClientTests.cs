@@ -54,6 +54,29 @@ public sealed class MaxBotClientTests
 		Assert.Equal("https://platform-api2.max.ru/answers?callback_id=id%2B%2F%3D", request.RequestUri!.ToString());
 	}
 
+	[Theory]
+	[InlineData(true)]
+	[InlineData(false)]
+	public async Task Edit_message_checks_success_and_sends_quiet_keyboard(bool success)
+	{
+		HttpRequestMessage? sent = null;
+		string? body = null;
+		var handler = new FakeHandler(request =>
+		{
+			sent = request;
+			body = request.Content!.ReadAsStringAsync().GetAwaiter().GetResult();
+			return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(success ? "{\"success\":true}" : "{\"success\":false}", Encoding.UTF8, "application/json") };
+		});
+		var client = new MaxBotClient(new HttpClient(handler) { BaseAddress = new Uri("https://platform-api2.max.ru/") }, NullLogger<MaxBotClient>.Instance);
+		if (success) await client.EditMessageAsync("id+/=", "Обновлено", [MaxBotCore.Scenarios.BotMessageFactory.Home()]);
+		else await Assert.ThrowsAsync<HttpRequestException>(() => client.EditMessageAsync("id+/=", "Обновлено", []));
+		Assert.Equal(HttpMethod.Put, sent!.Method);
+		Assert.Equal("https://platform-api2.max.ru/messages?message_id=id%2B%2F%3D", sent.RequestUri!.ToString());
+		using var json = System.Text.Json.JsonDocument.Parse(body!);
+		Assert.False(json.RootElement.GetProperty("notify").GetBoolean());
+		Assert.Equal(success ? 1 : 0, json.RootElement.GetProperty("attachments").GetArrayLength());
+	}
+
 	private sealed class FakeHandler(Func<HttpRequestMessage, HttpResponseMessage> respond) : HttpMessageHandler
 	{
 		protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request,

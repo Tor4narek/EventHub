@@ -72,7 +72,7 @@ public sealed class WebAppIntegrationTests
             .ReturnsAsync([item]);
         var max = new Mock<IMaxBotClient>();
         max.Setup(x => x.SendMessageToUserAsync(42, It.IsAny<string?>(), It.IsAny<IReadOnlyList<MaxAttachment>?>(),
-            null, true, It.IsAny<CancellationToken>())).ReturnsAsync(new MaxMessage());
+            null, false, It.IsAny<CancellationToken>())).ReturnsAsync(new MaxMessage());
         var scenario = new BotScenario(users.Object, new Mock<ITagService>().Object, recommendations.Object,
             saved.Object, events.Object, max.Object, Options.Create(new MaxOptions()));
         var me = new MeController(users.Object, saved.Object, recommendations.Object)
@@ -81,7 +81,7 @@ public sealed class WebAppIntegrationTests
             { User = new ClaimsPrincipal(new ClaimsIdentity([new Claim(JwtRegisteredClaimNames.Sub, jwt.Subject)], "test")) } }
         };
 
-        await scenario.HandleAsync(new BotCommand(42, BotCommandType.Remind, item.Id), CancellationToken.None);
+        await scenario.HandleAsync(new BotCommand(42, BotCommandType.Remind, item.Id, MessageId: "card-1"), CancellationToken.None);
         var webSaved = await me.GetSaved(CancellationToken.None);
         var response = Assert.IsAssignableFrom<IReadOnlyList<EventResponse>>(Assert.IsType<OkObjectResult>(webSaved.Result).Value);
         Assert.Equal(item.Id, Assert.Single(response).Id);
@@ -90,15 +90,15 @@ public sealed class WebAppIntegrationTests
         await me.Save(item.Id, CancellationToken.None);
         await scenario.HandleAsync(new BotCommand(42, BotCommandType.SavedEvents), CancellationToken.None);
         max.Verify(x => x.SendMessageToUserAsync(42, It.Is<string?>(text => text!.Contains("Лекция")),
-            It.IsAny<IReadOnlyList<MaxAttachment>?>(), null, true, It.IsAny<CancellationToken>()), Times.Once);
+            It.IsAny<IReadOnlyList<MaxAttachment>?>(), null, false, It.IsAny<CancellationToken>()), Times.Once);
 
         var tagId = Guid.NewGuid();
         await me.UpdateInterests(new TagIdsRequest([tagId]), CancellationToken.None);
         Assert.Equal(tagId, Assert.Single(await users.Object.GetUserTagIdsAsync(user.Id, CancellationToken.None)));
         await me.UpdateSettings(new SettingsRequest(false), CancellationToken.None);
         await scenario.HandleAsync(new BotCommand(42, BotCommandType.Settings), CancellationToken.None);
-        max.Verify(x => x.SendMessageToUserAsync(42, "Еженедельная подборка: выключена",
-            It.IsAny<IReadOnlyList<MaxAttachment>?>(), null, true, It.IsAny<CancellationToken>()), Times.Once);
+        max.Verify(x => x.SendMessageToUserAsync(42, It.Is<string?>(text => text!.StartsWith("Еженедельная подборка: выключена")),
+            It.IsAny<IReadOnlyList<MaxAttachment>?>(), null, false, It.IsAny<CancellationToken>()), Times.Once);
         await me.GetRecommendations(3, CancellationToken.None);
         recommendations.VerifyAll();
         await me.Get(CancellationToken.None);
