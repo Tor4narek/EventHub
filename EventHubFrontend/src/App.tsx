@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getEvent, getEvents, getMe, getRecommendations, getSavedEvents, getTags, loginWithMax, mediaUrl, removeSavedEvent, saveEvent, saveInterests, saveSettings, type EventResponse, type PagedEvents, type TagResponse } from './api';
-import { DateSlider } from './DateSlider';
 import { maxApp, maxInitData, observeMaxBack, observeMaxViewport, openExternal } from './maxBridge';
 
 type Page = 'catalog' | 'search' | 'saved' | 'interests' | 'selection';
@@ -184,6 +183,8 @@ export default function App() {
   const [format, setFormat] = useState<Format>('all');
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [stripAnchor, setStripAnchor] = useState(() => dateOnly(new Date()));
+  const [visibleDayCount, setVisibleDayCount] = useState(6);
+  const daysRef = useRef<HTMLDivElement>(null);
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
   const [detail, setDetail] = useState<EventResponse | null>(null);
@@ -272,6 +273,19 @@ export default function App() {
   }, [token, authStatus, page, profileReload]);
   useEffect(() => { const timer = window.setTimeout(() => setQuery(search.trim()), 280); return () => clearTimeout(timer); }, [search]);
   useEffect(() => {
+    if (page !== 'catalog' || !daysRef.current) return;
+    const element = daysRef.current;
+    const measure = () => setVisibleDayCount(Math.max(1, Math.floor((element.clientWidth + 8) / 46)));
+    measure();
+    if (typeof ResizeObserver === 'undefined') {
+      window.addEventListener('resize', measure);
+      return () => window.removeEventListener('resize', measure);
+    }
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [page]);
+  useEffect(() => {
     const controller = new AbortController();
     getTags(controller.signal).then(items => {
       setTags(items);
@@ -293,6 +307,7 @@ export default function App() {
   }, []);
   const referenceDate = new Date(now);
   const referenceDay = dateOnly(referenceDate);
+  const activeDay = selectedDay;
   const appliedTags = tagsEnabled ? selectedTags : [];
   const range = useMemo(() => {
     if (selectedDay && page === 'catalog') return { from: selectedDay, to: selectedDay };
@@ -405,7 +420,11 @@ export default function App() {
   }
 
   const todayKey = dateOnly(referenceDate);
-  const stripStart = new Date(`${stripAnchor < todayKey ? todayKey : stripAnchor}T12:00:00`);
+  const stripStart = new Date(`${stripAnchor}T12:00:00`);
+  const dayItems = Array.from({ length: visibleDayCount }, (_, index) => {
+    const date = new Date(stripStart.getFullYear(), stripStart.getMonth(), stripStart.getDate() + index);
+    return { key: dateOnly(date), day: date.getDate(), weekday: new Intl.DateTimeFormat(locale, { weekday: 'short' }).format(date).replace('.', '') };
+  });
   const upcomingItems = (result?.items || []).filter(event => Date.parse(event.eventDateTime) > now);
   const visibleItems = page === 'catalog' ? [...upcomingItems].sort((left, right) => Date.parse(left.eventDateTime) - Date.parse(right.eventDateTime)) : upcomingItems;
   const displayCount = Math.max(0, (result?.totalCount ?? 0) - ((result?.items.length ?? 0) - visibleItems.length));
@@ -419,7 +438,7 @@ export default function App() {
       {page === 'catalog' && <>
         <div className="search-inset"><SearchField value={search} onChange={setSearch} onFocus={() => navigate('search')} /></div>
         <div className="calendar"><div className="calendar-heading"><b>{new Intl.DateTimeFormat(locale, { month: 'long' }).format(stripStart).toUpperCase()} {stripStart.getFullYear()}</b><button onClick={() => setCalendarOpen(true)}>Выбрать дату</button></div>
-          <DateSlider today={todayKey} anchor={stripAnchor} value={selectedDay} onSelect={day => { setPeriod('all'); setSelectedDay(day); setStripAnchor(day); }} />
+          <div className="days" ref={daysRef} style={{ gridTemplateColumns: `repeat(${visibleDayCount}, minmax(0, 1fr))` }}>{dayItems.map(day => <button key={day.key} className={activeDay === day.key ? 'day active' : 'day'} onClick={() => { setPeriod('all'); if (selectedDay === day.key) { setSelectedDay(null); setStripAnchor(todayKey); } else setSelectedDay(day.key); }}><b>{day.day}</b><span>{day.weekday}</span></button>)}</div>
         </div>
         <div className="quick-filters"><button className={`chip ${period === 'all' && format === 'all' && !appliedTags.length && !selectedDay ? 'selected' : ''}`} onClick={resetFilters}>Все</button><button className="chip" onClick={() => setFilterOpen(true)}>Формат</button><button className="chip" onClick={() => setFilterOpen(true)}>Даты</button><button className="chip" onClick={() => setFilterOpen(true)}>Теги</button>{selectedTags.length > 0 && <button className={`chip ${tagsEnabled ? 'selected' : ''}`} onClick={() => setTagsEnabled(enabled => !enabled)}>По интересам · {selectedTags.length} {tagsEnabled ? '×' : '+'}</button>}</div>
         <div className="catalog-context"><span>{selectedDay ? `Выбрано: ${new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'long' }).format(new Date(`${selectedDay}T12:00:00`))}` : period === 'all' ? 'Все даты' : period === 'today' ? 'Сегодня' : period === 'week' ? 'Ближайшая неделя' : 'Ближайший месяц'}</span>{selectedDay && <button onClick={() => { setSelectedDay(null); setStripAnchor(todayKey); }}>Сбросить дату</button>}</div>
