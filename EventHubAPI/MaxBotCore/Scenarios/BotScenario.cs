@@ -69,6 +69,8 @@ public sealed class BotScenario : IBotScenario
 				break;
 			case BotCommandType.AllEvents:
 				await ShowMenuAsync(command.MaxUserId, cancellationToken);
+				if (string.IsNullOrWhiteSpace(_options.WebAppName))
+					await SendAsync(command.MaxUserId, "Мини-приложение пока не подключено к боту.", null, cancellationToken);
 				break;
 			case BotCommandType.SavedEvents:
 				await ShowSavedAsync(command.MaxUserId, user.Id, command.Offset, cancellationToken);
@@ -167,13 +169,8 @@ public sealed class BotScenario : IBotScenario
 		}
 	}
 
-	private async Task ShowMenuAsync(long maxUserId, CancellationToken cancellationToken)
-	{
-		long? botId = null;
-		if (string.IsNullOrWhiteSpace(_options.WebAppName))
-			botId = (await _max.GetMeAsync(cancellationToken)).UserId;
-		await SendAsync(maxUserId, "Главное меню", [BotMessageFactory.MainMenu(_options.WebAppName, botId)], cancellationToken);
-	}
+	private Task ShowMenuAsync(long maxUserId, CancellationToken cancellationToken) =>
+		SendAsync(maxUserId, "Главное меню", [BotMessageFactory.MainMenu(_options.WebAppName)], cancellationToken);
 
 	private async Task SendAsync(long userId, string text, IReadOnlyList<MaxAttachment>? attachments,
 		CancellationToken cancellationToken) =>

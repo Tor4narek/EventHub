@@ -8,10 +8,10 @@ public static class BotMessageFactory
 {
 	private static readonly TimeZoneInfo Moscow = TimeZoneInfo.FindSystemTimeZoneById("Europe/Moscow");
 
-	public static InlineKeyboardAttachment MainMenu(string? webAppName = null, long? botId = null)
+	public static InlineKeyboardAttachment MainMenu(string? webAppName = null)
 	{
-		var allEvents = !string.IsNullOrWhiteSpace(webAppName) || botId is > 0
-			? (MaxButton)new OpenAppButton { Text = "Все мероприятия", WebApp = string.IsNullOrWhiteSpace(webAppName) ? null : webAppName, ContactId = botId }
+		var allEvents = !string.IsNullOrWhiteSpace(webAppName)
+			? (MaxButton)new OpenAppButton { Text = "Все мероприятия", WebApp = webAppName }
 			: new CallbackButton { Text = "Все мероприятия", Payload = "menu:all" };
 		return Keyboard(
 			[new CallbackButton { Text = "Подобрать мероприятия", Payload = "menu:find" }],
