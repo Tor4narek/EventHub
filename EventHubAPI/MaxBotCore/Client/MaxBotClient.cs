@@ -1,4 +1,4 @@
-﻿using System.Net;
+using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -105,6 +105,16 @@ public sealed class MaxBotClient : IMaxBotClient
 		using var payload = await response.Content.ReadFromJsonAsync<JsonDocument>(cancellationToken);
 		if (payload?.RootElement.TryGetProperty("success", out var success) != true || success.ValueKind != JsonValueKind.True)
 			throw new HttpRequestException("MAX не подтвердил обновление сообщения.");
+	}
+
+	public async Task<bool> TryDeleteMessageAsync(string messageId, CancellationToken cancellationToken = default)
+	{
+		ArgumentException.ThrowIfNullOrWhiteSpace(messageId);
+		using var response = await _httpClient.DeleteAsync($"messages?message_id={Uri.EscapeDataString(messageId)}", cancellationToken);
+		if (response.StatusCode is HttpStatusCode.NotFound or HttpStatusCode.Forbidden) return false;
+		await EnsureSuccessAsync(response, "DELETE /messages", cancellationToken);
+		using var payload = await response.Content.ReadFromJsonAsync<JsonDocument>(cancellationToken);
+		return payload?.RootElement.TryGetProperty("success", out var success) == true && success.ValueKind == JsonValueKind.True;
 	}
 
 	private async Task<MaxMessage> SendMessageAsync(

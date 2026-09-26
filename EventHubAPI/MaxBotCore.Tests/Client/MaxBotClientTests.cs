@@ -77,6 +77,25 @@ public sealed class MaxBotClientTests
 		Assert.Equal(success ? 1 : 0, json.RootElement.GetProperty("attachments").GetArrayLength());
 	}
 
+	[Theory]
+	[InlineData(200, "{\"success\":true}", true)]
+	[InlineData(200, "{\"success\":false}", false)]
+	[InlineData(404, "{}", false)]
+	[InlineData(403, "{}", false)]
+	public async Task Delete_uses_encoded_message_id_and_checks_actual_result(int status, string body, bool expected)
+	{
+		HttpRequestMessage? sent = null;
+		var handler = new FakeHandler(request =>
+		{
+			sent = request;
+			return new HttpResponseMessage((HttpStatusCode)status) { Content = new StringContent(body, Encoding.UTF8, "application/json") };
+		});
+		var client = new MaxBotClient(new HttpClient(handler) { BaseAddress = new Uri("https://platform-api2.max.ru/") }, NullLogger<MaxBotClient>.Instance);
+		Assert.Equal(expected, await client.TryDeleteMessageAsync("id+/="));
+		Assert.Equal(HttpMethod.Delete, sent!.Method);
+		Assert.Equal("https://platform-api2.max.ru/messages?message_id=id%2B%2F%3D", sent.RequestUri!.ToString());
+	}
+
 	private sealed class FakeHandler(Func<HttpRequestMessage, HttpResponseMessage> respond) : HttpMessageHandler
 	{
 		protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request,

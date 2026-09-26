@@ -60,7 +60,8 @@ public sealed class BotScenarioTests
 
 		fixture.Recommendations.VerifyAll();
 		fixture.Max.Verify(x => x.SendMessageToUserAsync(42, "Главное меню",
-			It.IsAny<IReadOnlyList<MaxAttachment>?>(), null, false, It.IsAny<CancellationToken>()), Times.Once);
+			It.IsAny<IReadOnlyList<MaxAttachment>?>(), null, false, It.IsAny<CancellationToken>()), Times.Never);
+		Assert.Single(fixture.Max.Invocations, call => call.Method.Name == nameof(IMaxBotClient.SendMessageToUserAsync));
 	}
 
 	[Fact]
@@ -289,6 +290,71 @@ public sealed class BotScenarioTests
 		await fixture.Scenario.HandleAsync(new BotCommand(42, BotCommandType.Remind, item.Id, MessageId: "card-1"), CancellationToken.None);
 		fixture.Max.Verify(x => x.EditMessageAsync("card-1", It.Is<string>(text => text.Contains("Напоминание не включено")),
 			It.IsAny<IReadOnlyList<MaxAttachment>>(), It.IsAny<CancellationToken>()), Times.Once);
+	}
+
+	[Fact]
+	public async Task Onboarding_with_events_sends_one_card_and_one_menu_then_removes_interest_picker()
+	{
+		var fixture = new Fixture();
+		fixture.Users.Setup(x => x.CompleteOnboardingAsync(fixture.User.Id, It.IsAny<CancellationToken>())).ReturnsAsync(true);
+		fixture.Recommendations.Setup(x => x.GetTopEventsAsync(fixture.User.Id, 3, It.IsAny<DateTime>(), It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
+			.ReturnsAsync([new Event { Title = "Лекция", EventDateTime = DateTime.UtcNow.AddDays(2) }]);
+		await fixture.Scenario.HandleAsync(new BotCommand(42, BotCommandType.FinishOnboarding, MessageId: "interests-1"), CancellationToken.None);
+		var sent = fixture.Max.Invocations.Where(call => call.Method.Name == nameof(IMaxBotClient.SendMessageToUserAsync)).ToList();
+		Assert.Equal(2, sent.Count);
+		Assert.Contains("Интересы сохранены", (string)sent[1].Arguments[1]);
+		Assert.Single(sent, call => ((IReadOnlyList<MaxAttachment>)call.Arguments[2]).OfType<InlineKeyboardAttachment>()
+			.Any(keyboard => keyboard.Payload.Buttons.SelectMany(row => row).OfType<CallbackButton>().Any(button => button.Payload == "menu:settings")));
+		Assert.Equal(nameof(IMaxBotClient.TryDeleteMessageAsync), fixture.Max.Invocations.Last().Method.Name);
+		fixture.Max.Verify(x => x.TryDeleteMessageAsync("interests-1", It.IsAny<CancellationToken>()), Times.Once);
+	}
+
+	[Fact]
+	public async Task Empty_onboarding_reuses_interest_picker_as_the_only_navigation()
+	{
+		var fixture = new Fixture();
+		fixture.Users.Setup(x => x.CompleteOnboardingAsync(fixture.User.Id, It.IsAny<CancellationToken>())).ReturnsAsync(true);
+		fixture.Recommendations.Setup(x => x.GetTopEventsAsync(fixture.User.Id, 3, It.IsAny<DateTime>(), It.IsAny<DateTime>(), It.IsAny<CancellationToken>())).ReturnsAsync([]);
+		await fixture.Scenario.HandleAsync(new BotCommand(42, BotCommandType.FinishOnboarding, MessageId: "interests-1"), CancellationToken.None);
+		fixture.Max.Verify(x => x.EditMessageAsync("interests-1", It.Is<string>(text => text.Contains("Интересы сохранены") && text.Contains("Новых мероприятий")),
+			It.IsAny<IReadOnlyList<MaxAttachment>>(), It.IsAny<CancellationToken>()), Times.Once);
+		Assert.DoesNotContain(fixture.Max.Invocations, call => call.Method.Name == nameof(IMaxBotClient.SendMessageToUserAsync) || call.Method.Name == nameof(IMaxBotClient.TryDeleteMessageAsync));
+	}
+
+	[Fact]
+	public async Task Navigation_cleanup_failure_does_not_fail_or_repeat_delivered_selection()
+	{
+		var fixture = new Fixture(); fixture.User.HasCompletedOnboarding = true;
+		fixture.Recommendations.Setup(x => x.GetTopEventsAsync(fixture.User.Id, 3, It.IsAny<DateTime>(), It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
+			.ReturnsAsync([new Event { Title = "Лекция", EventDateTime = DateTime.UtcNow.AddDays(2) }]);
+		fixture.Max.Setup(x => x.TryDeleteMessageAsync("menu-1", It.IsAny<CancellationToken>())).ThrowsAsync(new HttpRequestException("MAX unavailable"));
+		await fixture.Scenario.HandleAsync(new BotCommand(42, BotCommandType.FindEvents, MessageId: "menu-1"), CancellationToken.None);
+		Assert.Equal(2, fixture.Max.Invocations.Count(call => call.Method.Name == nameof(IMaxBotClient.SendMessageToUserAsync)));
+	}
+
+	[Fact]
+	public async Task Failed_selection_delivery_keeps_previous_menu()
+	{
+		var fixture = new Fixture(); fixture.User.HasCompletedOnboarding = true;
+		fixture.Recommendations.Setup(x => x.GetTopEventsAsync(fixture.User.Id, 3, It.IsAny<DateTime>(), It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
+			.ReturnsAsync([new Event { Title = "Лекция", EventDateTime = DateTime.UtcNow.AddDays(2) }]);
+		fixture.Max.Setup(x => x.SendMessageToUserAsync(42, It.IsAny<string?>(), It.IsAny<IReadOnlyList<MaxAttachment>?>(), null, false, It.IsAny<CancellationToken>()))
+			.ThrowsAsync(new HttpRequestException("MAX unavailable"));
+		await Assert.ThrowsAsync<HttpRequestException>(() => fixture.Scenario.HandleAsync(new BotCommand(42, BotCommandType.FindEvents, MessageId: "menu-1"), CancellationToken.None));
+		Assert.DoesNotContain(fixture.Max.Invocations, call => call.Method.Name == nameof(IMaxBotClient.TryDeleteMessageAsync));
+	}
+
+	[Fact]
+	public void Event_card_shows_compact_preview_without_mutating_full_description()
+	{
+		var description = string.Join("\n\n", Enumerable.Repeat("Подробная программа мероприятия с лекциями и мастер-классами.", 20));
+		var item = new Event { Title = "Лекция", Description = description, EventDateTime = DateTime.UtcNow.AddDays(2) };
+		var card = BotMessageFactory.EventCard(item);
+		var preview = card.Text.Split("\n\n")[1];
+		Assert.True(preview.Length <= 180);
+		Assert.EndsWith("…", preview);
+		Assert.DoesNotContain("\n", preview);
+		Assert.Equal(description, item.Description);
 	}
 
 	private sealed class Fixture

@@ -47,7 +47,7 @@ public static class BotMessageFactory
 			: "не указан";
 		var registrationClosed = item.Deadline is { } registrationDeadline && registrationDeadline <= DateTime.UtcNow;
 		var past = item.EventDateTime <= DateTime.UtcNow;
-		var text = $"{item.Title}\n{date:dd.MM.yyyy HH:mm} МСК · {item.Location}\n\n{Shorten(item.Description, 280)}\n\n" +
+		var text = $"{item.Title}\n{date:dd.MM.yyyy HH:mm} МСК · {item.Location}\n\n{Shorten(item.Description, 180)}\n\n" +
 			(past ? "Мероприятие уже началось или завершилось." : registrationClosed ? "Срок регистрации закончился." :
 				item.Deadline.HasValue ? $"Регистрация до: {deadline}" : "Дедлайн регистрации не указан.") +
 			(saved ? "\n✓ Сохранено" : "");
@@ -107,7 +107,15 @@ public static class BotMessageFactory
 	private static InlineKeyboardAttachment Keyboard(params IReadOnlyList<MaxButton>[] rows) =>
 		new() { Payload = new InlineKeyboardPayload { Buttons = rows } };
 
-	private static string Shorten(string? text, int max) =>
-		string.IsNullOrWhiteSpace(text) ? "Описание отсутствует" :
-		text.Length > max ? text[..max].TrimEnd() + "…" : text;
+	private static string Shorten(string? text, int max)
+	{
+		if (string.IsNullOrWhiteSpace(text)) return "Описание отсутствует";
+		var compact = System.Text.RegularExpressions.Regex.Replace(text, @"\s+", " ").Trim();
+		if (compact.Length <= max) return compact;
+		var length = max - 1;
+		if (char.IsHighSurrogate(compact[length - 1])) length--;
+		var space = compact.LastIndexOf(' ', length - 1, length);
+		if (space >= max / 2) length = space;
+		return compact[..length].TrimEnd() + "…";
+	}
 }

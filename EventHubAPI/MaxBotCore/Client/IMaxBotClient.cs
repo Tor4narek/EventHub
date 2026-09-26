@@ -1,4 +1,4 @@
-﻿using MaxBotCore.Contracts.Attachments;
+using MaxBotCore.Contracts.Attachments;
 using MaxBotCore.Contracts.Common;
 using MaxBotCore.Contracts.Messages;
 using MaxBotCore.Contracts.Responses;
@@ -53,6 +53,9 @@ public interface IMaxBotClient
 
     /// <summary>Подтвердить нажатие inline-кнопки. POST /answers.</summary>
     Task AnswerCallbackAsync(string callbackId, CancellationToken cancellationToken = default);
+
+    /// <summary>Удалить собственное сообщение. false — удаление недоступно.</summary>
+    Task<bool> TryDeleteMessageAsync(string messageId, CancellationToken cancellationToken = default);
 
     Task EditMessageAsync(string messageId, string text, IReadOnlyList<MaxAttachment> attachments,
         CancellationToken cancellationToken = default);

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getEvent, getEvents, getMe, getRecommendations, getSavedEvents, getTags, loginWithMax, mediaUrl, removeSavedEvent, saveEvent, saveInterests, saveSettings, type EventResponse, type PagedEvents, type TagResponse } from './api';
-import { maxApp, maxInitData, observeMaxBack, openExternal } from './maxBridge';
+import { maxApp, maxInitData, observeMaxBack, observeMaxViewport, openExternal } from './maxBridge';
 
 type Page = 'catalog' | 'search' | 'saved' | 'interests' | 'selection';
 type Period = 'all' | 'today' | 'week' | 'month';
@@ -68,6 +68,7 @@ function EventCard({ event, saved, onSave, onOpen, savedPage = false, localOnly 
       <p className="event-description">{event.description}</p>
       <p className="event-date">{eventDate(event)}</p>
       <p className="event-location">{event.location}</p>
+      <span className="detail-link">Подробнее</span>
     </button>
     <div className="card-actions">
       <span className="event-deadline">{savedPage ? localOnly ? 'Только на этом устройстве · без напоминания' : 'Сохранено в профиле MAX' : deadlineText(event)}</span>
@@ -214,22 +215,7 @@ export default function App() {
   const [settingsSaving, setSettingsSaving] = useState(false);
   const settingsSavingRef = useRef(false);
 
-  useEffect(() => {
-    let mounted = true;
-    const syncViewport = () => maxApp()?.getViewportSize?.().then(viewport => {
-      const height = Number.parseFloat(viewport.height);
-      if (mounted && Number.isFinite(height) && height > 300) document.documentElement.style.setProperty('--max-viewport-height', `${height}px`);
-    }).catch(() => {});
-    syncViewport();
-    window.addEventListener('resize', syncViewport);
-    window.visualViewport?.addEventListener('resize', syncViewport);
-    return () => {
-      mounted = false;
-      window.removeEventListener('resize', syncViewport);
-      window.visualViewport?.removeEventListener('resize', syncViewport);
-      document.documentElement.style.removeProperty('--max-viewport-height');
-    };
-  }, []);
+  useEffect(observeMaxViewport, []);
 
   useEffect(() => { if (authStatus !== 'anonymous') return; try { localStorage.setItem(`${storageNamespace}-saved-v1`, JSON.stringify(saved)); } catch { /* in-memory fallback */ } }, [saved, authStatus]);
   useEffect(() => { if (authStatus !== 'anonymous') return; try { localStorage.setItem(`${storageNamespace}-tags-v1`, JSON.stringify(selectedTags)); } catch { /* in-memory fallback */ } }, [selectedTags, authStatus]);

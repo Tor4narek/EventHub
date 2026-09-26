@@ -44,3 +44,44 @@ export function observeMaxBack(active: boolean, callback: () => void) {
     back.hide();
   };
 }
+
+// iOS changes the visible viewport independently of the layout viewport (keyboard, MAX chrome).
+export function observeMaxViewport() {
+  let mounted = true;
+  let revision = 0;
+  const viewport = window.visualViewport;
+  const style = document.documentElement.style;
+  const apply = (height: number, top = 0) => {
+    if (!mounted || !Number.isFinite(height) || height <= 0) return;
+    style.setProperty('--max-viewport-height', `${height}px`);
+    style.setProperty('--max-viewport-top', `${top}px`);
+  };
+  const sync = () => {
+    const current = ++revision;
+    if (viewport && viewport.height > 0 && viewport.scale === 1) {
+      // Clamp stale iOS offsets after closing the keyboard.
+      const top = Math.max(0, Math.min(viewport.offsetTop, window.innerHeight - viewport.height));
+      apply(viewport.height, top);
+      return;
+    }
+    apply(window.innerHeight);
+    if (viewport) return; // Keep browser zoom available without resizing the app to the zoomed rectangle.
+    void maxApp()?.getViewportSize?.().then(size => {
+      const height = /^\d+(?:\.\d+)?(?:px)?$/.test(String(size.height)) ? Number.parseFloat(size.height) : NaN;
+      if (mounted && current === revision && height > 0) apply(Math.min(height, window.innerHeight));
+    }).catch(() => {});
+  };
+  sync();
+  window.addEventListener('resize', sync);
+  viewport?.addEventListener('resize', sync);
+  viewport?.addEventListener('scroll', sync);
+  return () => {
+    mounted = false;
+    revision++;
+    window.removeEventListener('resize', sync);
+    viewport?.removeEventListener('resize', sync);
+    viewport?.removeEventListener('scroll', sync);
+    style.removeProperty('--max-viewport-height');
+    style.removeProperty('--max-viewport-top');
+  };
+}

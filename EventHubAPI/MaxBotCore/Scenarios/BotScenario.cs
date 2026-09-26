@@ -84,9 +84,7 @@ public sealed class BotScenario : IBotScenario
 			case BotCommandType.FinishOnboarding:
 				if (await _users.CompleteOnboardingAsync(user.Id, cancellationToken))
 				{
-					await PresentAsync(command, "Интересы сохранены. Подбираю мероприятия на ближайшие семь дней.", [BotMessageFactory.Home()], cancellationToken);
-					await ShowRecommendationsAsync(command.MaxUserId, user.Id, cancellationToken);
-					await ShowMenuAsync(command.MaxUserId, cancellationToken);
+					await ShowRecommendationsAsync(command.MaxUserId, user.Id, cancellationToken, command.MessageId, "Интересы сохранены.\n\n");
 				}
 				else if ((await _users.GetUserTagIdsAsync(user.Id, cancellationToken)).Count == 0)
 					await ShowInterestsAsync(command.MaxUserId, user.Id, true, cancellationToken, command.MessageId, "Выбери хотя бы один интерес.");
@@ -96,7 +94,7 @@ public sealed class BotScenario : IBotScenario
 			case BotCommandType.FindEvents:
 				if (!user.HasCompletedOnboarding)
 					await ShowInterestsAsync(command.MaxUserId, user.Id, true, cancellationToken);
-				else await ShowRecommendationsAsync(command.MaxUserId, user.Id, cancellationToken);
+				else await ShowRecommendationsAsync(command.MaxUserId, user.Id, cancellationToken, command.MessageId);
 				break;
 			case BotCommandType.AllEvents:
 				if (string.IsNullOrWhiteSpace(_options.WebAppName))
@@ -104,7 +102,7 @@ public sealed class BotScenario : IBotScenario
 				else await PresentAsync(command, "Открой каталог по кнопке «Все мероприятия ↗» ниже.", [BotMessageFactory.NextActions(_options.WebAppName)], cancellationToken);
 				break;
 			case BotCommandType.SavedEvents:
-				await ShowSavedAsync(command.MaxUserId, user.Id, command.Offset, cancellationToken, command.Past);
+				await ShowSavedAsync(command.MaxUserId, user.Id, command.Offset, cancellationToken, command.Past, command.MessageId);
 				break;
 			case BotCommandType.Interests:
 				await ShowInterestsAsync(command.MaxUserId, user.Id, !user.HasCompletedOnboarding, cancellationToken, command.MessageId);
@@ -175,31 +173,34 @@ public sealed class BotScenario : IBotScenario
 			[BotMessageFactory.Interests(tags, selected, onboarding)], cancellationToken);
 	}
 
-	private async Task ShowRecommendationsAsync(long maxUserId, Guid userId, CancellationToken cancellationToken)
+	private async Task ShowRecommendationsAsync(long maxUserId, Guid userId, CancellationToken cancellationToken,
+		string? messageId = null, string notice = "")
 	{
 		var now = DateTime.UtcNow;
 		var events = await _recommendations.GetTopEventsAsync(userId, 3, now, now.AddDays(7), cancellationToken);
 		if (events.Count == 0)
 		{
 			var hasSaved = (await _savedEvents.GetSavedEventsAsync(userId, cancellationToken)).Any(item => item.EventDateTime > now);
-			await SendAsync(maxUserId, "Новых мероприятий с открытой регистрацией на ближайшие 7 дней пока нет. " +
+			await PresentAsync(new BotCommand(maxUserId, BotCommandType.FindEvents, MessageId: messageId), notice + "Новых мероприятий с открытой регистрацией на ближайшие 7 дней пока нет. " +
 				(hasSaved ? "Посмотри сохранённые события или открой каталог." : "Открой каталог всех мероприятий или измени интересы."),
 				[BotMessageFactory.NextActions(_options.WebAppName, hasSaved)], cancellationToken);
 			return;
 		}
-		await SendAsync(maxUserId, $"Подборка на ближайшие 7 дней · мероприятий: {events.Count}", null, cancellationToken);
 		await SendEventsAsync(maxUserId, events, false, cancellationToken);
-		await SendAsync(maxUserId, "Сохранение включает напоминание. Регистрация — на сайте организатора.", [BotMessageFactory.NextActions(_options.WebAppName, true)], cancellationToken);
+		await SendAsync(maxUserId, notice + $"Подборка на ближайшие 7 дней · мероприятий: {events.Count}\n\n" +
+			"Сохранение включает напоминание. Полное описание — в каталоге, в разделе «Подробнее». Регистрация — на сайте организатора.",
+			[BotMessageFactory.MainMenu(_options.WebAppName)], cancellationToken);
+		await RetireNavigationAsync(messageId, cancellationToken);
 	}
 
-	private async Task ShowSavedAsync(long maxUserId, Guid userId, int offset, CancellationToken cancellationToken, bool past = false)
+	private async Task ShowSavedAsync(long maxUserId, Guid userId, int offset, CancellationToken cancellationToken, bool past = false, string? messageId = null)
 	{
 		var saved = await _savedEvents.GetSavedEventsAsync(userId, cancellationToken);
 		var now = DateTime.UtcNow;
 		var events = saved.Where(item => past ? item.EventDateTime <= now : item.EventDateTime > now).ToList();
 		if (events.Count == 0)
 		{
-			await SendAsync(maxUserId, past ? "Прошедших сохранённых мероприятий нет." : "Предстоящих сохранённых мероприятий пока нет. Сохрани событие из подборки или каталога — я напомню о нём.",
+			await PresentAsync(new BotCommand(maxUserId, BotCommandType.SavedEvents, MessageId: messageId), past ? "Прошедших сохранённых мероприятий нет." : "Предстоящих сохранённых мероприятий пока нет. Сохрани событие из подборки или каталога — я напомню о нём.",
 				[past ? BotMessageFactory.SavedNavigation(0, 0, true, false) :
 					BotMessageFactory.NextActions(_options.WebAppName, hasPast: saved.Any(item => item.EventDateTime <= now))], cancellationToken);
 			return;
@@ -208,12 +209,29 @@ public sealed class BotScenario : IBotScenario
 		var page = events.Skip(offset).Take(pageSize).ToList();
 		if (page.Count == 0)
 		{
-			await SendAsync(maxUserId, "Список изменился. Открой сохранённые заново.", [BotMessageFactory.NextActions(_options.WebAppName, true)], cancellationToken);
+			await PresentAsync(new BotCommand(maxUserId, BotCommandType.SavedEvents, MessageId: messageId), "Список изменился. Открой сохранённые заново.", [BotMessageFactory.NextActions(_options.WebAppName, true)], cancellationToken);
 			return;
 		}
-		await SendAsync(maxUserId, $"{(past ? "Прошедшие" : "Предстоящие")} сохранённые · {offset + 1}–{offset + page.Count} из {events.Count}", null, cancellationToken);
 		await SendEventsAsync(maxUserId, page, true, cancellationToken);
-		await SendAsync(maxUserId, "Что дальше?", [BotMessageFactory.SavedNavigation(offset, events.Count, past, saved.Any(item => item.EventDateTime <= now))], cancellationToken);
+		await SendAsync(maxUserId, $"{(past ? "Прошедшие" : "Предстоящие")} сохранённые · {offset + 1}–{offset + page.Count} из {events.Count}",
+			[BotMessageFactory.SavedNavigation(offset, events.Count, past, saved.Any(item => item.EventDateTime <= now))], cancellationToken);
+		await RetireNavigationAsync(messageId, cancellationToken);
+	}
+
+	private async Task RetireNavigationAsync(string? messageId, CancellationToken cancellationToken)
+	{
+		if (string.IsNullOrWhiteSpace(messageId)) return;
+		// Delete only the callback's previous bot menu after the replacement has been sent.
+		// Cleanup failure must not retry a selection that the user has already received.
+		await Task.Delay(TimeSpan.FromMilliseconds(550), cancellationToken);
+		try
+		{
+			if (!await _max.TryDeleteMessageAsync(messageId, cancellationToken))
+				_logger?.LogWarning("MAX не удалил прежнее меню {MessageId}", messageId);
+		}
+		catch (Exception ex) when (ex is HttpRequestException or KeyNotFoundException or InvalidOperationException ||
+			ex is OperationCanceledException && !cancellationToken.IsCancellationRequested)
+		{ _logger?.LogWarning(ex, "Не удалось убрать прежнее меню MAX {MessageId}", messageId); }
 	}
 
 	private async Task SendEventsAsync(long maxUserId, IReadOnlyList<Event> events, bool saved, CancellationToken cancellationToken)
