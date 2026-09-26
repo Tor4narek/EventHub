@@ -145,7 +145,8 @@ public class UserEventService : IUserEventService
 
 		return await _dbContext.Events
 			.AsNoTracking()
-			.Where(e => _dbContext.UserEvents.Any(ue => ue.UserId == userId && ue.EventId == e.Id))
+			.Where(e => e.EventStatus == EventStatus.Published &&
+				_dbContext.UserEvents.Any(ue => ue.UserId == userId && ue.EventId == e.Id))
 			.Include(e => e.Tags)
 			.OrderBy(e => e.EventDateTime)
 			.ToListAsync(cancellationToken);
