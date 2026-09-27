@@ -80,6 +80,7 @@ public class RecomendationService : IRecomendationService
 			.Include(e => e.Tags)
 			.Where(e =>
 				e.EventStatus == EventStatus.Published &&
+				e.Tags.Any(tag => selectedTagIds.Contains(tag.TagId) || savedTagIds.Contains(tag.TagId)) &&
 				e.EventDateTime >= from &&
 				e.EventDateTime >= now &&
 				e.EventDateTime < to &&
