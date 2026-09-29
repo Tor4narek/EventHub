@@ -25,14 +25,15 @@ public class MeController : ControllerBase
 	private Guid UserId => Guid.Parse(User.FindFirst(JwtRegisteredClaimNames.Sub)!.Value);
 
 	[HttpGet]
-	public async Task<IActionResult> Get(CancellationToken cancellationToken)
+	public async Task<ActionResult<MeResponse>> Get(CancellationToken cancellationToken)
 	{
 		var user = await _users.GetByIdAsync(UserId, cancellationToken);
 		var tagIds = await _users.GetUserTagIdsAsync(UserId, cancellationToken);
-		return Ok(new { user!.Id, user.MaxUserId, user.IsWeeklyDigestEnabled, TagIds = tagIds });
+		return Ok(new MeResponse(user!.Id, user.MaxUserId, user.IsWeeklyDigestEnabled, tagIds));
 	}
 
 	[HttpPut("interests")]
+	[ProducesResponseType(StatusCodes.Status204NoContent)]
 	public async Task<IActionResult> UpdateInterests(TagIdsRequest request, CancellationToken cancellationToken)
 	{
 		await _users.UpdateUserTagsAsync(UserId, request.TagIds, cancellationToken);
@@ -40,6 +41,8 @@ public class MeController : ControllerBase
 	}
 
 	[HttpGet("recommendations")]
+	[ProducesResponseType<IReadOnlyList<EventResponse>>(StatusCodes.Status200OK)]
+	[ProducesResponseType(StatusCodes.Status400BadRequest)]
 	public async Task<ActionResult<IReadOnlyList<EventResponse>>> GetRecommendations(
 		[FromQuery] int limit = 3,
 		CancellationToken cancellationToken = default)
@@ -62,6 +65,7 @@ public class MeController : ControllerBase
 	}
 
 	[HttpPost("saved-events/{eventId:guid}")]
+	[ProducesResponseType(StatusCodes.Status204NoContent)]
 	public async Task<IActionResult> Save(Guid eventId, CancellationToken cancellationToken)
 	{
 		await _savedEvents.SaveEventAsync(UserId, eventId, cancellationToken);
@@ -69,6 +73,7 @@ public class MeController : ControllerBase
 	}
 
 	[HttpDelete("saved-events/{eventId:guid}")]
+	[ProducesResponseType(StatusCodes.Status204NoContent)]
 	public async Task<IActionResult> Remove(Guid eventId, CancellationToken cancellationToken)
 	{
 		await _savedEvents.RemoveEventAsync(UserId, eventId, cancellationToken);
@@ -76,6 +81,7 @@ public class MeController : ControllerBase
 	}
 
 	[HttpPatch("settings")]
+	[ProducesResponseType(StatusCodes.Status204NoContent)]
 	public async Task<IActionResult> UpdateSettings(SettingsRequest request, CancellationToken cancellationToken)
 	{
 		await _users.SetWeeklyDigestAsync(UserId, request.IsWeeklyDigestEnabled, cancellationToken);

@@ -9,6 +9,8 @@ namespace EventHubAPI.Controllers;
 public class AdminAuthController : ControllerBase
 {
 	[HttpPost("login")]
+	[ProducesResponseType<TokenResponse>(StatusCodes.Status200OK)]
+	[ProducesResponseType(StatusCodes.Status401Unauthorized)]
 	public ActionResult<TokenResponse> Login(
 		AdminLoginRequest request,
 		[FromServices] AdminCredentialVerifier credentials,

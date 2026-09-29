@@ -14,6 +14,7 @@ using Microsoft.Extensions.Options;
 using Minio;
 using Services;
 using MaxBotCore.Extensions;
+using MaxBotCore.Work;
 using Scheduler;
 using Services.Interfaces;
 using Storage;
@@ -99,6 +100,48 @@ builder.Services.AddOpenApi(options =>
 				}
 			};
 		}
+		if (context.Description.HttpMethod == "POST" &&
+			context.Description.RelativePath?.Trim('/') == "api/max/webhook")
+		{
+			operation.RequestBody = new OpenApiRequestBody
+			{
+				Required = true,
+				Content = new Dictionary<string, OpenApiMediaType>
+				{
+					["application/json"] = new()
+					{
+						Schema = new OpenApiSchema
+						{
+							Type = JsonSchemaType.Object,
+							Properties = new Dictionary<string, IOpenApiSchema>
+							{
+								["update_type"] = new OpenApiSchema { Type = JsonSchemaType.String },
+								["timestamp"] = new OpenApiSchema { Type = JsonSchemaType.Integer }
+							},
+							Required = new HashSet<string> { "update_type", "timestamp" }
+						}
+					}
+				}
+			};
+		}
+		if (context.Description.HttpMethod == "GET" &&
+			context.Description.RelativePath?.Trim('/') == "api/media/{objectKey}")
+		{
+			var imageContent = new Dictionary<string, OpenApiMediaType>();
+			foreach (var contentType in new[] { "image/jpeg", "image/png", "image/webp", "image/gif" })
+			{
+				imageContent[contentType] = new OpenApiMediaType
+				{
+					Schema = new OpenApiSchema { Type = JsonSchemaType.String, Format = "binary" }
+				};
+			}
+			operation.Responses ??= new OpenApiResponses();
+			operation.Responses["200"] = new OpenApiResponse
+			{
+				Description = "Изображение",
+				Content = imageContent
+			};
+		}
 		var metadata = context.Description.ActionDescriptor.EndpointMetadata;
 		if (metadata.OfType<IAuthorizeData>().Any() && !metadata.OfType<IAllowAnonymous>().Any())
 		{
@@ -109,6 +152,8 @@ builder.Services.AddOpenApi(options =>
 	});
 	options.AddDocumentTransformer((document, _, _) =>
 	{
+		// Keep the document valid behind Caddy without publishing the internal HTTP origin.
+		document.Servers = [new OpenApiServer { Url = "/" }];
 		document.Components ??= new OpenApiComponents();
 		document.Components.SecuritySchemes ??= new Dictionary<string, IOpenApiSecurityScheme>();
 		document.Components.SecuritySchemes["Bearer"] = new OpenApiSecurityScheme
@@ -139,6 +184,19 @@ builder.Services.AddScoped<ITagService, TagService>();
 builder.Services.AddEventImport();
 builder.Services.AddMaxBotCore(builder.Configuration);
 builder.Services.AddBotScheduler();
+if (builder.Environment.IsEnvironment("OpenApiExport"))
+{
+	var workers = new[] { typeof(EventImportWorker), typeof(BotUpdateWorker), typeof(BotSchedulerService) };
+	for (var index = builder.Services.Count - 1; index >= 0; index--)
+	{
+		var registration = builder.Services[index];
+		if (registration.ServiceType == typeof(IHostedService) &&
+			registration.ImplementationType is { } worker && workers.Contains(worker))
+		{
+			builder.Services.RemoveAt(index);
+		}
+	}
+}
 builder.Services.Configure<MinioOptions>(builder.Configuration.GetSection("Minio"));
 builder.Services.AddSingleton<IMinioClient>(services =>
 {
@@ -184,8 +242,9 @@ if (origins.Length > 0)
 }
 
 var app = builder.Build();
-await using (var scope = app.Services.CreateAsyncScope())
+if (!app.Environment.IsEnvironment("OpenApiExport"))
 {
+	await using var scope = app.Services.CreateAsyncScope();
 	var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 	await dbContext.Database.MigrateAsync();
 }
@@ -210,7 +269,8 @@ app.UseExceptionHandler(errorApp => errorApp.Run(async context =>
 		.ExecuteAsync(context);
 }));
 
-if (app.Environment.IsDevelopment() || builder.Configuration.GetValue<bool>("Swagger:Enabled"))
+if (app.Environment.IsDevelopment() || app.Environment.IsEnvironment("OpenApiExport") ||
+	builder.Configuration.GetValue<bool>("Swagger:Enabled"))
 {
 	app.MapOpenApi();
 	app.UseSwaggerUI(options => options.SwaggerEndpoint("/openapi/v1.json", "EventHub API"));

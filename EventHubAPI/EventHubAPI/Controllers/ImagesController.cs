@@ -18,6 +18,8 @@ public sealed class ImagesController : ControllerBase
 	[HttpPost("api/admin/images")]
 	[Authorize(Roles = "Admin")]
 	[Consumes("multipart/form-data")]
+	[ProducesResponseType<StoredImage>(StatusCodes.Status200OK)]
+	[ProducesResponseType(StatusCodes.Status400BadRequest)]
 	[RequestSizeLimit(MinioImageStorageService.MaxImageSize + 1024 * 1024)]
 	public async Task<ActionResult<StoredImage>> Upload([FromForm] IFormFile file,
 		CancellationToken cancellationToken)
@@ -32,6 +34,7 @@ public sealed class ImagesController : ControllerBase
 
 	[HttpGet("api/media/{**objectKey}")]
 	[AllowAnonymous]
+	[ProducesResponseType(StatusCodes.Status404NotFound)]
 	public async Task<IActionResult> Download(string objectKey, CancellationToken cancellationToken)
 	{
 		var contentType = _images.GetContentType(objectKey);

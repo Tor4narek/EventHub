@@ -18,6 +18,7 @@ public class AdminTagsController : ControllerBase
 	}
 
 	[HttpPost]
+	[ProducesResponseType(typeof(TagResponse), StatusCodes.Status201Created)]
 	public async Task<ActionResult<TagResponse>> Create(TagRequest request, CancellationToken cancellationToken)
 	{
 		var tag = await _tags.CreateTagAsync(request.Name, request.Description, request.Examples, cancellationToken);
@@ -32,6 +33,7 @@ public class AdminTagsController : ControllerBase
 	}
 
 	[HttpDelete("{tagId:guid}")]
+	[ProducesResponseType(StatusCodes.Status204NoContent)]
 	public async Task<IActionResult> Delete(Guid tagId, CancellationToken cancellationToken)
 	{
 		await _tags.DeleteTagAsync(tagId, cancellationToken);

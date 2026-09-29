@@ -1,5 +1,7 @@
-# DATA-API 1.0. The public API address must remain available during evaluation.
-# Do not put passwords, JWTs, MAX initData, or other secrets in this file.
+# DATA-API 1.0. Use a dedicated test user with the User role and a matching
+# interest, plus a published event within the next seven days that this user
+# has not saved yet. The event must have no expired registration deadline.
+# Credentials and MAX initData are provided separately, never in this file.
 schemaVersion: "1.0"
 
 solution:
@@ -7,6 +9,7 @@ solution:
 
 api:
   baseUrl: "https://api.eventhub.faberlab.tech"
+  openapi: "./openapi.json"
   defaultHeaders:
     Accept: "application/json"
 
@@ -20,6 +23,7 @@ checks:
       query:
         page: 1
         pageSize: 20
+        allDates: true
     expected:
       statusCodes: [200]
       contentType: "application/json"
@@ -30,6 +34,7 @@ checks:
         properties:
           items:
             type: "array"
+            minItems: 1
           page:
             type: "integer"
           pageSize:
@@ -38,6 +43,24 @@ checks:
             type: "integer"
           hasNextPage:
             type: "boolean"
+    timeoutMs: 5000
+    repeatable: true
+    extract:
+      eventId: "$.items[0].id"
+
+  - id: "event-details"
+    name: "Карточка опубликованного мероприятия"
+    method: "GET"
+    path: "/api/events/{eventId}"
+    role: "public"
+    dependsOn: ["published-events"]
+    request:
+      path:
+        eventId: "${eventId}"
+    expected:
+      statusCodes: [200]
+      contentType: "application/json"
+      requiredFields: ["id", "title", "description", "eventDateTime", "location", "source", "tagIds"]
     timeoutMs: 5000
     repeatable: true
 
@@ -51,5 +74,64 @@ checks:
       contentType: "application/json"
       bodySchema:
         type: "array"
+        minItems: 1
     timeoutMs: 5000
     repeatable: true
+
+  - id: "recommendations"
+    name: "Персональная подборка пользователя"
+    method: "GET"
+    path: "/api/me/recommendations"
+    role: "user"
+    request:
+      query:
+        limit: 3
+    expected:
+      statusCodes: [200]
+      contentType: "application/json"
+      bodySchema:
+        type: "array"
+        minItems: 1
+    timeoutMs: 5000
+    repeatable: true
+
+  - id: "save-event"
+    name: "Сохранение мероприятия с напоминанием"
+    method: "POST"
+    path: "/api/me/saved-events/{eventId}"
+    role: "user"
+    dependsOn: ["published-events"]
+    request:
+      path:
+        eventId: "${eventId}"
+    expected:
+      statusCodes: [204]
+    timeoutMs: 5000
+    repeatable: true
+
+  - id: "saved-events"
+    name: "Общий список сохранённых мероприятий"
+    method: "GET"
+    path: "/api/me/saved-events"
+    role: "user"
+    dependsOn: ["save-event"]
+    expected:
+      statusCodes: [200]
+      contentType: "application/json"
+      bodySchema:
+        type: "array"
+        minItems: 1
+    timeoutMs: 5000
+    repeatable: true
+
+cleanup:
+  - id: "remove-saved-event"
+    method: "DELETE"
+    path: "/api/me/saved-events/{eventId}"
+    role: "user"
+    request:
+      path:
+        eventId: "${eventId}"
+    expected:
+      statusCodes: [204]
+    timeoutMs: 5000

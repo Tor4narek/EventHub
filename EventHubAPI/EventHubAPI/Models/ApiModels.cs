@@ -50,6 +50,9 @@ public record EventSearchRequest
 public record MaxLoginRequest(string InitData);
 public record AdminLoginRequest(string Username, string Password);
 public record TokenResponse(string AccessToken, DateTime ExpiresAt);
+public record MeResponse(Guid Id, long MaxUserId, bool IsWeeklyDigestEnabled, IReadOnlyList<Guid> TagIds);
+public record EventImportStartResponse(Guid ImportId);
+public record EventImportConfirmResponse(Guid EventId);
 public record TagIdsRequest(IReadOnlyCollection<Guid> TagIds);
 public record SettingsRequest(bool IsWeeklyDigestEnabled);
 public record TagRequest(string Name, string Description, IReadOnlyCollection<string> Examples);

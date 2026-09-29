@@ -34,9 +34,15 @@ public sealed class MaxWebhookController : ControllerBase
 	/// Проверяем JSON и сохраняем его для фоновой обработки.
 	/// </summary>
 	[HttpPost("webhook")]
+	[Consumes("application/json")]
+	[ProducesResponseType(StatusCodes.Status200OK)]
+	[ProducesResponseType(StatusCodes.Status401Unauthorized)]
+	[ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
 	[RequestSizeLimit(1_000_000)]
 	[ServiceFilter(typeof(MaxWebhookSecretFilter))]
-	public async Task<IActionResult> Webhook(CancellationToken cancellationToken)
+	public async Task<IActionResult> Webhook(
+		CancellationToken cancellationToken,
+		[FromHeader(Name = "X-Max-Bot-Api-Secret")] string? webhookSecret = null)
 	{
 		using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 		timeout.CancelAfter(TimeSpan.FromSeconds(25));
@@ -81,5 +87,8 @@ public sealed class MaxWebhookController : ControllerBase
 	/// Health-check для проверки что бот-модуль жив.
 	/// </summary>
 	[HttpGet("health")]
-	public IActionResult Health() => Ok(new { status = "ok", module = "MaxBotCore" });
+	[ProducesResponseType(typeof(BotHealthResponse), StatusCodes.Status200OK)]
+	public IActionResult Health() => Ok(new BotHealthResponse("ok", "MaxBotCore"));
 }
+
+public record BotHealthResponse(string Status, string Module);

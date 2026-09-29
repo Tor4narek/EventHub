@@ -10,6 +10,8 @@ namespace EventHubAPI.Controllers;
 public class AuthController : ControllerBase
 {
 	[HttpPost("max")]
+	[ProducesResponseType<TokenResponse>(StatusCodes.Status200OK)]
+	[ProducesResponseType(StatusCodes.Status401Unauthorized)]
 	public async Task<ActionResult<TokenResponse>> LoginWithMax(
 		MaxLoginRequest request,
 		[FromServices] MaxInitDataValidator validator,

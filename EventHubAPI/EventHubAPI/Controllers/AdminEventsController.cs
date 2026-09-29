@@ -36,6 +36,7 @@ public class AdminEventsController : ControllerBase
 	}
 
 	[HttpPost]
+	[ProducesResponseType(typeof(EventResponse), StatusCodes.Status201Created)]
 	public async Task<ActionResult<EventResponse>> Create(EventDto request, CancellationToken cancellationToken)
 	{
 		var item = await _events.CreateEventAsync(request, cancellationToken);
@@ -65,6 +66,7 @@ public class AdminEventsController : ControllerBase
 	}
 
 	[HttpPost("{eventId:guid}/unpublish")]
+	[ProducesResponseType(StatusCodes.Status204NoContent)]
 	public async Task<IActionResult> Unpublish(Guid eventId, CancellationToken cancellationToken)
 	{
 		await _events.UnpublishEventAsync(eventId, cancellationToken);
