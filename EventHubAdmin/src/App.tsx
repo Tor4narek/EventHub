@@ -12,6 +12,7 @@ const initialFilters: EventFilters = { page: 1, pageSize: 10, search: '', tags: 
 const errorMessage = (error: unknown) => error instanceof Error ? error.message : 'Произошла ошибка.'
 const statusText = (status: EventItem['eventStatus']) => status === 1 || status === 'Draft' ? 'Черновик' : status === 0 || status === 'Published' ? 'Опубликовано' : `Статус ${status}`
 const published = (event: EventItem) => event.eventStatus === 0 || event.eventStatus === 'Published'
+const draft = (event: EventItem) => event.eventStatus === 1 || event.eventStatus === 'Draft'
 const imageSrc = (value: string) => {
   try {
     const url = new URL(value, window.location.origin)
@@ -114,14 +115,14 @@ function EventEditor({ event, tags, onClose, onSaved }: { event: EventItem | nul
   </Modal>
 }
 
-function EventCard({ event, tags, onEdit, onReview, onAction, busy, disabled }: { event: EventItem; tags: Tag[]; onEdit: () => void; onReview: () => void; onAction: (kind: 'publish' | 'unpublish') => void; busy: boolean; disabled: boolean }) {
+function EventCard({ event, tags, onEdit, onReview, onAction, busy, disabled }: { event: EventItem; tags: Tag[]; onEdit: () => void; onReview: () => void; onAction: (kind: 'publish' | 'unpublish' | 'delete') => void; busy: boolean; disabled: boolean }) {
   return <Panel mode="secondary" className="event-card">
     {event.mainImg ? <img className="event-image" src={imageSrc(event.mainImg)} alt="" /> : <div className="event-mark" aria-hidden="true">{event.title.trim().slice(0, 2).toLocaleUpperCase() || 'EH'}</div>}
     <div className="event-content"><div className="event-top"><Badge tone={published(event) ? 'live' : 'draft'}>{statusText(event.eventStatus)}</Badge><Badge tone={event.tagsConfirmed ? 'confirmed' : 'pending'}>{event.tagsConfirmed ? 'Теги проверены' : 'Проверить теги'}</Badge></div>
       <h3>{event.title}</h3><p className="event-description">{event.description}</p>
       <div className="event-meta"><span><Icon icon={Clock3} size={16} />{displayDate(event.eventDateTime)}</span><span><Icon icon={MapPin} size={16} />{event.location}</span></div>
       <div className="card-tags">{event.tagIds.length ? event.tagIds.map(id => <span className="mini-tag" key={id}>{tags.find(t => t.id === id)?.name || id.slice(0, 8)}</span>) : <span className="muted">Без тегов</span>}</div>
-      <div className="card-actions"><Button size="small" variant="secondary" disabled={disabled} onClick={onEdit}>Редактировать</Button>{!event.tagsConfirmed && <Button size="small" variant="secondary" disabled={disabled} onClick={onReview}>Проверить теги</Button>}{published(event) ? <Button size="small" variant="destructive" disabled={disabled} loading={busy} onClick={() => onAction('unpublish')}>Снять с публикации</Button> : <Button size="small" variant="primary" disabled={disabled} loading={busy} onClick={() => event.tagsConfirmed ? onAction('publish') : onReview()}>Опубликовать</Button>}</div>
+      <div className="card-actions"><Button size="small" variant="secondary" disabled={disabled} onClick={onEdit}>Редактировать</Button>{!event.tagsConfirmed && <Button size="small" variant="secondary" disabled={disabled} onClick={onReview}>Проверить теги</Button>}{published(event) ? <Button size="small" variant="destructive" disabled={disabled} loading={busy} onClick={() => onAction('unpublish')}>Снять с публикации</Button> : <Button size="small" variant="primary" disabled={disabled} loading={busy} onClick={() => event.tagsConfirmed ? onAction('publish') : onReview()}>Опубликовать</Button>}{draft(event) && <Button size="small" variant="destructive" disabled={disabled} loading={busy} onClick={() => onAction('delete')}>Удалить</Button>}</div>
     </div>
   </Panel>
 }
@@ -138,7 +139,7 @@ function EventList({ tags, reviewOnly, refreshTags }: { tags: Tag[]; reviewOnly:
   const [busyId, setBusyId] = useState('')
   const [revision, setRevision] = useState(0)
   const [fetchFailed, setFetchFailed] = useState(false)
-  const [pendingAction, setPendingAction] = useState<{ event: EventItem; kind: 'publish' | 'unpublish' } | null>(null)
+  const [pendingAction, setPendingAction] = useState<{ event: EventItem; kind: 'publish' | 'unpublish' | 'delete' } | null>(null)
   const actionLock = useRef(false)
   const invalidRange = Boolean(filters.from && filters.to && filters.from > filters.to)
   const reload = () => setRevision(v => v + 1)
@@ -153,12 +154,19 @@ function EventList({ tags, reviewOnly, refreshTags }: { tags: Tag[]; reviewOnly:
     return () => { current = false }
   }, [filters, revision, invalidRange])
 
-  async function action(event: EventItem, kind: 'publish' | 'unpublish') {
+  async function action(event: EventItem, kind: 'publish' | 'unpublish' | 'delete') {
     if (kind === 'publish' && !event.tagsConfirmed) { setReviewing(event); return }
     if (actionLock.current) return
     actionLock.current = true
     setBusyId(event.id); setError(''); setMessage('')
-    try { if (kind === 'publish') await api.publish(event.id); else await api.unpublish(event.id); setMessage(kind === 'publish' ? 'Мероприятие опубликовано.' : 'Мероприятие переведено в черновик.'); reload() }
+    try {
+      if (kind === 'publish') await api.publish(event.id)
+      else if (kind === 'unpublish') await api.unpublish(event.id)
+      else await api.deleteEvent(event.id)
+      setMessage(kind === 'publish' ? 'Мероприятие опубликовано.' : kind === 'unpublish' ? 'Мероприятие переведено в черновик.' : 'Черновик удалён.')
+      if (kind === 'delete' && page?.items.length === 1 && filters.page > 1) updateFilters({ page: filters.page - 1 })
+      else reload()
+    }
     catch (err) { setError(errorMessage(err)) }
     finally { setBusyId(''); actionLock.current = false; setPendingAction(null) }
   }
@@ -188,7 +196,7 @@ function EventList({ tags, reviewOnly, refreshTags }: { tags: Tag[]; reviewOnly:
     {loading && page && <Loading compact />}
     {loading && !page ? <Loading /> : page?.items.length ? <div className={`event-list ${loading || invalidRange || fetchFailed ? 'is-refreshing' : ''}`} aria-busy={loading}>{page.items.map(event => <EventCard key={event.id} event={event} tags={tags} busy={busyId === event.id} disabled={Boolean(busyId) || loading || invalidRange || fetchFailed} onEdit={() => setEditing(event)} onReview={() => setReviewing(event)} onAction={kind => setPendingAction({ event, kind })} />)}</div> : !error && !invalidRange && <EmptyState title={reviewOnly ? 'Очередь пуста' : 'Мероприятий не найдено'} text={reviewOnly ? 'Сейчас нет событий, которым нужна проверка тегов.' : 'Измените фильтры или создайте новое мероприятие.'} icon={reviewOnly ? ListChecks : CalendarDays} />}
     {page && page.totalCount > page.pageSize && <Pagination page={page.page} totalPages={Math.ceil(page.totalCount / page.pageSize)} hasNext={page.hasNextPage} disabled={loading || invalidRange || fetchFailed} onChange={value => updateFilters({ page: value })} />}
-    {pendingAction && <ConfirmDialog title={pendingAction.kind === 'publish' ? 'Опубликовать мероприятие?' : 'Снять с публикации?'} text={`«${pendingAction.event.title}». ${pendingAction.kind === 'publish' ? 'Мероприятие станет доступно пользователям.' : 'Мероприятие останется в черновиках, связи и сохранения сохранятся.'}`} confirmLabel={pendingAction.kind === 'publish' ? 'Опубликовать' : 'Снять с публикации'} destructive={pendingAction.kind === 'unpublish'} busy={Boolean(busyId)} onClose={() => setPendingAction(null)} onConfirm={() => void action(pendingAction.event, pendingAction.kind)} />}
+    {pendingAction && <ConfirmDialog title={pendingAction.kind === 'publish' ? 'Опубликовать мероприятие?' : pendingAction.kind === 'unpublish' ? 'Снять с публикации?' : 'Удалить черновик?'} text={`«${pendingAction.event.title}». ${pendingAction.kind === 'publish' ? 'Мероприятие станет доступно пользователям.' : pendingAction.kind === 'unpublish' ? 'Мероприятие останется в черновиках, связи и сохранения сохранятся.' : 'Мероприятие, связанные сохранения пользователей и записи импорта будут удалены без возможности восстановления.'}`} confirmLabel={pendingAction.kind === 'publish' ? 'Опубликовать' : pendingAction.kind === 'unpublish' ? 'Снять с публикации' : 'Удалить'} destructive={pendingAction.kind !== 'publish'} busy={Boolean(busyId)} onClose={() => setPendingAction(null)} onConfirm={() => void action(pendingAction.event, pendingAction.kind)} />}
     {editing && <EventEditor key={editing === 'new' ? 'new' : editing.id} event={editing === 'new' ? null : editing} tags={tags} onClose={() => setEditing(null)} onSaved={text => { setEditing(null); setMessage(text); reload(); refreshTags() }} />}
     {reviewing && <ReviewDialog key={reviewing.id} event={reviewing} tags={tags} onClose={() => setReviewing(null)} onSaved={() => { setReviewing(null); setMessage('Теги подтверждены. Мероприятие можно публиковать.'); reload() }} />}
   </>

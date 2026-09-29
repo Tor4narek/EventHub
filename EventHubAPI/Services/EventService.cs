@@ -302,6 +302,40 @@ public class EventService : IEventService
 		await ChangeEventStatusAsync(eventId, EventStatus.Draft, cancellationToken);
 	}
 
+	public async Task DeleteDraftEventAsync(Guid eventId, CancellationToken cancellationToken)
+	{
+		if (eventId == Guid.Empty)
+		{
+			throw new ArgumentException("Передан пустой id", nameof(eventId));
+		}
+
+		await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+		var status = await _dbContext.Events.AsNoTracking()
+			.Where(e => e.Id == eventId)
+			.Select(e => (EventStatus?)e.EventStatus)
+			.SingleOrDefaultAsync(cancellationToken);
+		if (status is null)
+		{
+			throw new KeyNotFoundException($"Мероприятия с Id {eventId} не существует.");
+		}
+		if (status != EventStatus.Draft)
+		{
+			throw new InvalidOperationException("Удалить можно только черновик. Сначала снимите мероприятие с публикации.");
+		}
+
+		await _dbContext.EventImportItems.Where(item => item.EventId == eventId)
+			.ExecuteDeleteAsync(cancellationToken);
+		var deleted = await _dbContext.Events
+			.Where(item => item.Id == eventId && item.EventStatus == EventStatus.Draft)
+			.ExecuteDeleteAsync(cancellationToken);
+		if (deleted != 1)
+		{
+			throw new InvalidOperationException("Удалить можно только черновик. Сначала снимите мероприятие с публикации.");
+		}
+
+		await transaction.CommitAsync(cancellationToken);
+	}
+
 	private async Task<HashSet<Guid>> ValidateEventDtoAsync(EventDto eventDto, CancellationToken cancellationToken)
 	{
 		ArgumentNullException.ThrowIfNull(eventDto);

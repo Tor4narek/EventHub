@@ -9,6 +9,49 @@ namespace EventImport.Tests;
 public class EventCatalogTests(ImportDatabase database) : IClassFixture<ImportDatabase>
 {
 	[PostgresFact]
+	public async Task Only_draft_can_be_deleted_with_its_saves_tags_and_import_links()
+	{
+		await using var db = database.CreateContext();
+		var now = DateTime.UtcNow;
+		var draft = new Event
+		{
+			Id = Guid.NewGuid(), Title = "Draft to delete", Description = "Description", Location = "Online",
+			Source = "https://example.org/event", EventDateTime = now.AddDays(1), CreatedAt = now, UpdatedAt = now
+		};
+		var published = new Event
+		{
+			Id = Guid.NewGuid(), Title = "Published to keep", Description = "Description", Location = "Online",
+			Source = "https://example.org/other", EventDateTime = now.AddDays(1),
+			EventStatus = EventStatus.Published, CreatedAt = now, UpdatedAt = now
+		};
+		var tag = new Tag { Id = Guid.NewGuid(), Name = "Delete test " + Guid.NewGuid(), Description = "Test", Examples = [] };
+		var user = new User { Id = Guid.NewGuid(), MaxUserId = Random.Shared.NextInt64(1, long.MaxValue) };
+		var run = new EventImportRun { Id = Guid.NewGuid(), CreatedAt = now };
+		var import = new EventImportItem
+		{
+			Id = Guid.NewGuid(), ImportRunId = run.Id, EventId = draft.Id, SourceKey = Guid.NewGuid().ToString("N"),
+			Source = draft.Source, Status = EventImportStatus.Confirmed, CreatedAt = now, UpdatedAt = now
+		};
+		db.AddRange(draft, published, tag, user, run);
+		db.EventTags.Add(new EventTag { EventId = draft.Id, TagId = tag.Id });
+		db.UserEvents.Add(new UserEvent { EventId = draft.Id, UserId = user.Id });
+		db.EventImportItems.Add(import);
+		await db.SaveChangesAsync();
+
+		var service = new EventService(db);
+		await Assert.ThrowsAsync<InvalidOperationException>(() => service.DeleteDraftEventAsync(published.Id, default));
+		Assert.True(await db.Events.AnyAsync(e => e.Id == published.Id));
+		await service.DeleteDraftEventAsync(draft.Id, default);
+		Assert.False(await db.Events.AnyAsync(e => e.Id == draft.Id));
+		Assert.False(await db.EventTags.AnyAsync(e => e.EventId == draft.Id));
+		Assert.False(await db.UserEvents.AnyAsync(e => e.EventId == draft.Id));
+		Assert.False(await db.EventImportItems.AnyAsync(e => e.Id == import.Id));
+		Assert.True(await db.EventImportRuns.AnyAsync(e => e.Id == run.Id));
+		Assert.True(await db.Tags.AnyAsync(e => e.Id == tag.Id));
+		Assert.True(await db.Users.AnyAsync(e => e.Id == user.Id));
+	}
+
+	[PostgresFact]
 	public async Task Public_catalog_excludes_events_started_today_in_all_date_modes_but_admin_retains_them()
 	{
 		await using var db = database.CreateContext();

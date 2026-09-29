@@ -72,4 +72,12 @@ public class AdminEventsController : ControllerBase
 		await _events.UnpublishEventAsync(eventId, cancellationToken);
 		return NoContent();
 	}
+
+	[HttpDelete("{eventId:guid}")]
+	[ProducesResponseType(StatusCodes.Status204NoContent)]
+	public async Task<IActionResult> DeleteDraft(Guid eventId, CancellationToken cancellationToken)
+	{
+		await _events.DeleteDraftEventAsync(eventId, cancellationToken);
+		return NoContent();
+	}
 }

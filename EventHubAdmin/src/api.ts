@@ -104,6 +104,7 @@ export const api = {
   confirmTags: (id: string, tagIds: string[]) => request<EventItem>(`/api/admin/events/${idPath(id)}/tags`, { method: 'PUT', body: json({ tagIds }) }),
   publish: (id: string) => request<EventItem>(`/api/admin/events/${idPath(id)}/publish`, { method: 'POST' }),
   unpublish: (id: string) => request<void>(`/api/admin/events/${idPath(id)}/unpublish`, { method: 'POST' }),
+  deleteEvent: (id: string) => request<void>(`/api/admin/events/${idPath(id)}`, { method: 'DELETE' }),
   tags: () => request<Tag[]>('/api/tags'),
   createTag: (body: TagPayload) => request<Tag>('/api/admin/tags', { method: 'POST', body: json(body) }),
   updateTag: (id: string, body: TagPayload) => request<Tag>(`/api/admin/tags/${idPath(id)}`, { method: 'PUT', body: json(body) }),

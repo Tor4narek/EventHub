@@ -340,6 +340,27 @@
             }
           }
         }
+      },
+      "delete": {
+        "tags": [
+          "AdminEvents"
+        ],
+        "parameters": [
+          {
+            "name": "eventId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          }
+        }
       }
     },
     "/api/admin/events/{eventId}/tags": {

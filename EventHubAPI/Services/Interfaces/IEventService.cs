@@ -45,4 +45,8 @@ public interface IEventService
 	public Task UnpublishEventAsync(
 		Guid eventId,
 		CancellationToken cancellationToken);
+
+	public Task DeleteDraftEventAsync(
+		Guid eventId,
+		CancellationToken cancellationToken);
 }
