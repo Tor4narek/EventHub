@@ -1,6 +1,7 @@
 # DATA-API 1.0. Use a dedicated test user with the User role and a matching
 # interest, plus a published event within the next seven days that this user
 # has not saved yet. The event must have no expired registration deadline.
+# The local synthetic event and tag can be created with test-data/seed.py.
 # Credentials and MAX initData are provided separately, never in this file.
 schemaVersion: "1.0"
 
@@ -35,6 +36,9 @@ checks:
           items:
             type: "array"
             minItems: 1
+            items:
+              type: "object"
+              required: ["id", "title", "description", "eventDateTime", "location", "source", "tagIds"]
           page:
             type: "integer"
           pageSize:
@@ -75,6 +79,9 @@ checks:
       bodySchema:
         type: "array"
         minItems: 1
+        items:
+          type: "object"
+          required: ["id", "name", "description", "examples"]
     timeoutMs: 5000
     repeatable: true
 
@@ -92,6 +99,9 @@ checks:
       bodySchema:
         type: "array"
         minItems: 1
+        items:
+          type: "object"
+          required: ["id", "title", "eventDateTime", "location", "source", "tagIds"]
     timeoutMs: 5000
     repeatable: true
 
@@ -121,6 +131,9 @@ checks:
       bodySchema:
         type: "array"
         minItems: 1
+        items:
+          type: "object"
+          required: ["id", "title", "eventDateTime", "location", "source", "tagIds"]
     timeoutMs: 5000
     repeatable: true
 

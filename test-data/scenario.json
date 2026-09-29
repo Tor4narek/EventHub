@@ -1,0 +1,15 @@
+{
+  "tag": {
+    "name": "EventHub API — тест",
+    "description": "Тег для воспроизводимой технической проверки EventHub.",
+    "examples": ["Тестовое мероприятие"]
+  },
+  "event": {
+    "title": "EventHub API — тестовое мероприятие",
+    "description": "Открытое онлайн-мероприятие для проверки каталога, рекомендаций и сохранений.",
+    "location": "Онлайн",
+    "source": "https://example.org/eventhub-test",
+    "startAfterDays": 3,
+    "deadlineAfterDays": 2
+  }
+}

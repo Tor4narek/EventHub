@@ -77,7 +77,7 @@
             }
           }
         },
-        "security": []
+        "security": [ ]
       }
     },
     "/api/admin/events": {
@@ -1005,7 +1005,7 @@
             }
           }
         },
-        "security": []
+        "security": [ ]
       }
     },
     "/api/events": {
@@ -1123,7 +1123,7 @@
             }
           }
         },
-        "security": []
+        "security": [ ]
       }
     },
     "/api/events/{eventId}": {
@@ -1164,7 +1164,7 @@
             }
           }
         },
-        "security": []
+        "security": [ ]
       }
     },
     "/api/admin/images": {
@@ -1301,7 +1301,7 @@
             }
           }
         },
-        "security": []
+        "security": [ ]
       }
     },
     "/api/me": {
@@ -1588,7 +1588,7 @@
             }
           }
         },
-        "security": []
+        "security": [ ]
       }
     },
     "/api/tags/{tagId}": {
@@ -1629,7 +1629,7 @@
             }
           }
         },
-        "security": []
+        "security": [ ]
       }
     },
     "/api/max/webhook": {
@@ -1696,7 +1696,7 @@
             "description": "Service Unavailable"
           }
         },
-        "security": []
+        "security": [ ]
       }
     },
     "/api/max/health": {
@@ -1726,7 +1726,7 @@
             }
           }
         },
-        "security": []
+        "security": [ ]
       }
     }
   },
@@ -2378,7 +2378,7 @@
   },
   "security": [
     {
-      "Bearer": []
+      "Bearer": [ ]
     }
   ],
   "tags": [
