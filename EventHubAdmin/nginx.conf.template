@@ -15,6 +15,10 @@ server {
         client_max_body_size 11m;
     }
 
+    location = /index.html {
+        add_header Cache-Control "no-store";
+    }
+
     location / {
         try_files $uri $uri/ /index.html;
     }

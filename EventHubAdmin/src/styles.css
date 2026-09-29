@@ -185,6 +185,7 @@ legend { margin-bottom: 10px; }
 .modal-close { position: absolute; right: 20px; top: 20px; z-index: 2; }
 .drawer-actions, .dialog-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 10px; padding-top: 18px; border-top: 1px solid var(--color-line); }
 .drawer-actions { position: sticky; bottom: -32px; padding-bottom: 16px; background: white; z-index: 1; }
+.drawer-delete { margin-right: auto; }
 .dialog { position: relative; width: min(100%,560px); max-height: calc(100dvh - 48px); overflow: auto; padding: 32px; animation: appear var(--motion-dialog) ease-out; }
 .dialog h2 { padding-right: 36px; }
 .dialog>.muted { font-size: 14px; }

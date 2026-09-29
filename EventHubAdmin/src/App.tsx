@@ -51,7 +51,7 @@ function Login({ onLogin }: { onLogin: () => void }) {
   </div>
 }
 
-function EventEditor({ event, tags, onClose, onSaved }: { event: EventItem | null; tags: Tag[]; onClose: () => void; onSaved: (message: string) => void }) {
+function EventEditor({ event, tags, onClose, onSaved, onDeleted }: { event: EventItem | null; tags: Tag[]; onClose: () => void; onSaved: (message: string) => void; onDeleted: () => void }) {
   const [title, setTitle] = useState(event?.title || '')
   const [description, setDescription] = useState(event?.description || '')
   const [date, setDate] = useState(toMoscowInput(event?.eventDateTime || null))
@@ -63,6 +63,7 @@ function EventEditor({ event, tags, onClose, onSaved }: { event: EventItem | nul
   const [busy, setBusy] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState('')
+  const [deleteConfirm, setDeleteConfirm] = useState(false)
 
   const dirty = JSON.stringify([title, description, date, deadline, locationText, source, [...tagIds].sort(), mainImg]) !== JSON.stringify([event?.title || '', event?.description || '', toMoscowInput(event?.eventDateTime || null), toMoscowInput(event?.deadline || null), event?.location || '', event?.source || '', [...(event?.tagIds || [])].sort(), event?.mainImg || null])
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
@@ -96,7 +97,14 @@ function EventEditor({ event, tags, onClose, onSaved }: { event: EventItem | nul
     } catch (err) { setError(errorMessage(err)) }
     finally { setBusy(false) }
   }
-  return <Modal drawer label={event ? 'Редактирование мероприятия' : 'Новое мероприятие'} dirty={dirty} busy={busy || uploading} onClose={onClose}>
+  async function remove() {
+    if (!event) return
+    setBusy(true); setError('')
+    try { await api.deleteEvent(event.id); onDeleted() }
+    catch (err) { setError(errorMessage(err)) }
+    finally { setBusy(false); setDeleteConfirm(false) }
+  }
+  return <><Modal drawer label={event ? 'Редактирование мероприятия' : 'Новое мероприятие'} dirty={dirty} busy={busy || uploading} onClose={onClose}>
       <div className="drawer-head"><div><div className="eyebrow">МЕРОПРИЯТИЕ</div><h2>{event ? 'Редактировать' : 'Новое мероприятие'}</h2></div></div>
       <form onSubmit={submit} className="drawer-body"><fieldset disabled={busy || uploading} className="form-stack">
 		<FormField label="Название"><Input value={title} onChange={e => setTitle(e.target.value)} placeholder="Например, лекция о городском искусстве" required /></FormField>
@@ -110,9 +118,9 @@ function EventEditor({ event, tags, onClose, onSaved }: { event: EventItem | nul
           <label className="upload-zone"><input type="file" accept="image/jpeg,image/png,image/webp,image/gif" onChange={e => { void upload(e.target.files?.[0]); e.target.value = '' }} disabled={uploading || busy} /><span>{uploading ? 'Загружаем изображение…' : 'Выбрать изображение'}</span><small>JPEG, PNG, WebP или GIF · до 10 МБ</small></label>
         </div>
         {error && <Notice text={error} onClose={() => setError('')} />}
-        <div className="drawer-actions"><ModalCancel disabled={busy || uploading} /><Button type="submit" variant="primary" loading={busy} disabled={uploading}>{event ? 'Сохранить' : 'Создать черновик'}</Button></div>
+        <div className="drawer-actions">{event && draft(event) && <Button icon={Trash2} variant="destructive" className="drawer-delete" disabled={busy || uploading} onClick={() => setDeleteConfirm(true)}>Удалить черновик</Button>}<ModalCancel disabled={busy || uploading} /><Button type="submit" variant="primary" loading={busy} disabled={uploading}>{event ? 'Сохранить' : 'Создать черновик'}</Button></div>
       </fieldset></form>
-  </Modal>
+  </Modal>{deleteConfirm && event && <ConfirmDialog title="Удалить черновик?" text={`«${event.title}». Мероприятие, связанные сохранения пользователей и записи импорта будут удалены без возможности восстановления.`} confirmLabel="Удалить" destructive busy={busy} onClose={() => setDeleteConfirm(false)} onConfirm={() => void remove()} />}</>
 }
 
 function EventCard({ event, tags, onEdit, onReview, onAction, busy, disabled }: { event: EventItem; tags: Tag[]; onEdit: () => void; onReview: () => void; onAction: (kind: 'publish' | 'unpublish' | 'delete') => void; busy: boolean; disabled: boolean }) {
@@ -144,6 +152,11 @@ function EventList({ tags, reviewOnly, refreshTags }: { tags: Tag[]; reviewOnly:
   const invalidRange = Boolean(filters.from && filters.to && filters.from > filters.to)
   const reload = () => setRevision(v => v + 1)
   const updateFilters = (patch: Partial<EventFilters>) => setFilters(old => ({ ...old, ...patch, page: patch.page ?? 1 }))
+  const afterDelete = () => {
+    setEditing(null); setMessage('Черновик удалён.')
+    if (page?.items.length === 1 && filters.page > 1) updateFilters({ page: filters.page - 1 })
+    else reload()
+  }
 
   useEffect(() => { const timer = setTimeout(() => updateFilters({ search: searchText }), 350); return () => clearTimeout(timer) }, [searchText])
   useEffect(() => {
@@ -163,9 +176,8 @@ function EventList({ tags, reviewOnly, refreshTags }: { tags: Tag[]; reviewOnly:
       if (kind === 'publish') await api.publish(event.id)
       else if (kind === 'unpublish') await api.unpublish(event.id)
       else await api.deleteEvent(event.id)
-      setMessage(kind === 'publish' ? 'Мероприятие опубликовано.' : kind === 'unpublish' ? 'Мероприятие переведено в черновик.' : 'Черновик удалён.')
-      if (kind === 'delete' && page?.items.length === 1 && filters.page > 1) updateFilters({ page: filters.page - 1 })
-      else reload()
+      if (kind === 'delete') afterDelete()
+      else { setMessage(kind === 'publish' ? 'Мероприятие опубликовано.' : 'Мероприятие переведено в черновик.'); reload() }
     }
     catch (err) { setError(errorMessage(err)) }
     finally { setBusyId(''); actionLock.current = false; setPendingAction(null) }
@@ -197,7 +209,7 @@ function EventList({ tags, reviewOnly, refreshTags }: { tags: Tag[]; reviewOnly:
     {loading && !page ? <Loading /> : page?.items.length ? <div className={`event-list ${loading || invalidRange || fetchFailed ? 'is-refreshing' : ''}`} aria-busy={loading}>{page.items.map(event => <EventCard key={event.id} event={event} tags={tags} busy={busyId === event.id} disabled={Boolean(busyId) || loading || invalidRange || fetchFailed} onEdit={() => setEditing(event)} onReview={() => setReviewing(event)} onAction={kind => setPendingAction({ event, kind })} />)}</div> : !error && !invalidRange && <EmptyState title={reviewOnly ? 'Очередь пуста' : 'Мероприятий не найдено'} text={reviewOnly ? 'Сейчас нет событий, которым нужна проверка тегов.' : 'Измените фильтры или создайте новое мероприятие.'} icon={reviewOnly ? ListChecks : CalendarDays} />}
     {page && page.totalCount > page.pageSize && <Pagination page={page.page} totalPages={Math.ceil(page.totalCount / page.pageSize)} hasNext={page.hasNextPage} disabled={loading || invalidRange || fetchFailed} onChange={value => updateFilters({ page: value })} />}
     {pendingAction && <ConfirmDialog title={pendingAction.kind === 'publish' ? 'Опубликовать мероприятие?' : pendingAction.kind === 'unpublish' ? 'Снять с публикации?' : 'Удалить черновик?'} text={`«${pendingAction.event.title}». ${pendingAction.kind === 'publish' ? 'Мероприятие станет доступно пользователям.' : pendingAction.kind === 'unpublish' ? 'Мероприятие останется в черновиках, связи и сохранения сохранятся.' : 'Мероприятие, связанные сохранения пользователей и записи импорта будут удалены без возможности восстановления.'}`} confirmLabel={pendingAction.kind === 'publish' ? 'Опубликовать' : pendingAction.kind === 'unpublish' ? 'Снять с публикации' : 'Удалить'} destructive={pendingAction.kind !== 'publish'} busy={Boolean(busyId)} onClose={() => setPendingAction(null)} onConfirm={() => void action(pendingAction.event, pendingAction.kind)} />}
-    {editing && <EventEditor key={editing === 'new' ? 'new' : editing.id} event={editing === 'new' ? null : editing} tags={tags} onClose={() => setEditing(null)} onSaved={text => { setEditing(null); setMessage(text); reload(); refreshTags() }} />}
+    {editing && <EventEditor key={editing === 'new' ? 'new' : editing.id} event={editing === 'new' ? null : editing} tags={tags} onClose={() => setEditing(null)} onSaved={text => { setEditing(null); setMessage(text); reload(); refreshTags() }} onDeleted={afterDelete} />}
     {reviewing && <ReviewDialog key={reviewing.id} event={reviewing} tags={tags} onClose={() => setReviewing(null)} onSaved={() => { setReviewing(null); setMessage('Теги подтверждены. Мероприятие можно публиковать.'); reload() }} />}
   </>
 }
